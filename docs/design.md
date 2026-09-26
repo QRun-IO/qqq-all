@@ -16,7 +16,7 @@ One repo that gives a fully running QQQ app with every feature configured and wo
 ## Qbits (v1)
 - **In:** quick-search, user-role-permissions, customizable-table-views, standard-process-trace, webhooks, workflows, geo-data, sftp-data-integration.
 - **Deferred:** crm (being rehabilitated for the Business Platform), wms (large), session-store (alpha), middleware-mcp (no auth), easypost / custom-apps / worm-audit (external keys or stubs).
-- Each included qbit is re-pinned to `qbit-build-parent` 2.0.0 and qqq 4.1 (one PR per qbit repo). Quick-search also gets its index-drift fix and repo cleanup.
+- Each included qbit is re-pinned to `qbit-build-parent` 2.0.0 (qqq 4.0.0) and verified against 4.1.0-SNAPSHOT (one PR per qbit repo); it moves to a 4.1 parent at 4.1 GA. Quick-search also gets its index-drift fix and repo cleanup.
 
 ## Core prerequisites (qqq 4.1)
 - **Launcher** — one entry point that starts the web server, scheduler, and ESB when configured. Every app gets it, not just qqq-all.

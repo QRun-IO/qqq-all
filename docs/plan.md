@@ -8,6 +8,8 @@
 
 **Depends on:** ESB epic QRun-IO/qqq#739 and Next-as-default QRun-IO/qqq#649, both in qqq 4.1.
 
+**Licensing:** do not change LICENSE files or source headers in any repo. Header/license alignment (several repos still carry AGPL headers and LICENSE files) is a separate owner decision.
+
 ## Global Constraints
 
 - Java 21. qqq `4.1.0-SNAPSHOT` until 4.1 GA, then `4.1.x`. qqq-all version tracks qqq.
@@ -23,15 +25,15 @@
 
 **A1. Application launcher.** One entry point that starts everything configured.
 - `qqq-backend-core`: `QRuntimeServiceInterface { String getName(); void start(QInstance); void stop(); }`, `QInstance.withRuntimeService(QCodeReference)` / `getRuntimeServices()`.
-- `qqq-middleware-javalin`: `QApplicationLauncher.run(AbstractQQQApplication, QApplicationLauncherConfig)`. It builds and validates the instance, then starts:
+- `qqq-middleware-javalin`: `QApplicationLauncher.run(AbstractQQQApplication, QApplicationLauncherConfig)`. It creates `QApplicationJavalinServer` for the app and reuses the instance that server builds (never a second instance), then starts:
   - `QApplicationJavalinServer`;
   - `QScheduleManager` when the instance has schedules or scheduled jobs;
   - each registered runtime service.
   A JVM shutdown hook stops them in reverse order.
-- `qqq-esb`: `EsbInstanceMetaData.enrich` registers `QEsbRuntime` as a runtime service. This part waits for ESB task 10.
+- `qqq-esb`: `EsbInstanceMetaData.enrich` registers `QEsbRuntime` as a runtime service. This part waits for ESB task 10 (QRun-IO/qqq#748).
 - Tests: start order, reverse stop order, a service failing to start stops the ones already started and fails the launch, and the scheduler is skipped when nothing is scheduled.
 
-**A2. Fail-fast metadata producers.** With `QInstance.withFailOnMetaDataProducerError(true)` (or system property `qqq.metaData.failOnProducerError=true`), `MetaDataProducerHelper` throws instead of logging a warning (its catch sites around lines 141, 190, 286). The default is unchanged. Tests cover both modes.
+**A2. Fail-fast metadata producers.** With `QInstance.withFailOnMetaDataProducerError(true)` (or system property `qqq.metaData.failOnProducerError=true`), `MetaDataProducerHelper` throws wherever it currently logs a warning and drops a producer (evaluating a candidate producer class during discovery, and executing a producer). The default is unchanged. Tests cover both modes.
 
 ### Qbit re-pins (one per repo)
 
@@ -39,8 +41,8 @@
 
 Each:
 1. If `main` has commits not in `develop`, open a back-merge PR (`main` → `develop`) first. Resolve conflicts keeping develop's features and main's fixes; no force-push.
-2. Parent → `com.kingsrook:qbit-build-parent:2.0.0`. Remove child `qqq-bom-pom` imports that shadow the parent (ADR-0007). Java 21. Apache-2.0 `<licenses>` metadata.
-3. Build and test green on the parent's qqq 4.0.0, and on `-Dqqq.version=4.1.0-SNAPSHOT` (or the parent's equivalent property).
+2. Parent → `com.kingsrook:qbit-build-parent:2.0.0` (imports `qqq-bom-pom` 4.0.0). Remove child `qqq-bom-pom` imports that shadow the parent. Java 21. Leave LICENSE files and headers as they are.
+3. Build and test green on the parent's qqq 4.0.0. Also add an opt-in Maven profile `qqq-snapshot` that imports `qqq-bom-pom:${qqq.snapshot.version}` (default `4.1.0-SNAPSHOT`) ahead of the parent's BOM and adds the Central snapshots repository (`https://central.sonatype.com/repository/maven-snapshots/`); `-Pqqq-snapshot` must also build and test green. (The parent has no qqq-version property to override.) The move to a 4.1 parent happens at 4.1 GA (task C9).
 4. Integration tests that need Docker fail, not skip, when `CI=true`.
 
 **B1 extra (quick-search):**
@@ -93,6 +95,7 @@ Each:
 - Limits: local demo and reference only; production needs DNS, TLS, backups, monitoring, HA brokers.
 
 **C9. Publish (after qqq 4.1 GA with ESB and Next default; ask James first).**
+- Release a `qbit-build-parent` that imports the 4.1 BOM, re-pin the 8 qbits to it, and release them.
 - Pin qqq 4.1.x.
 - Tag `4.1.0`.
 - Publish the image and `qqq-all-bom` release.
@@ -123,7 +126,9 @@ Most qbit repos have issues disabled, so their tasks are tracked in QRun-IO/qqq.
 |---|---|---|
 | Q1 | A2, B1–B8, C1 | — |
 | Q2 | C2 | B1–B8 merged, C1 |
-| Q3 | A1 | ESB task 10 merged |
-| Q4 | C3, C4, C5 | A1, A2, C2 |
-| Q5 | C6, C7, C8 | C3–C5; ESB epic complete |
-| Q6 | C9 | qqq 4.1 GA (ESB + Next default); James's go-ahead |
+| Q3 | A1 | ESB task 10 (qqq#748) merged |
+| Q4 | C3 | A1, A2, C2; ESB tasks 8 and 10 (qqq#746, #748) |
+| Q5 | C4, C5 | C3 |
+| Q6 | C6, C8 | C4, C5 |
+| Q7 | C7 | C6; ESB epic complete |
+| Q8 | C9 | qqq 4.1 GA (ESB + Next default); James's go-ahead |
