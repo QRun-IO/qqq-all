@@ -40,7 +40,7 @@ public final class ProfileLauncher
       Integer port = Integer.valueOf(environment.getOrDefault("QQQ_ALL_PORT", "8080"));
       if("core".equals(selected))
       {
-         CoreRuntime.launch(dataDirectory, port);
+         CoreRuntime.launch(dataDirectory, port, environment.getOrDefault("QQQ_ALL_BIND_HOST", "127.0.0.1"));
          return;
       }
 

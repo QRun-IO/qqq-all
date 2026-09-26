@@ -48,6 +48,7 @@
    </dependencies>
 
    <build>
+      <finalName>qqq-all-app</finalName>
       <plugins>
          <plugin>
             <groupId>org.apache.maven.plugins</groupId>

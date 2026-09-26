@@ -32,6 +32,11 @@ final class CoreRuntime implements AutoCloseable
 
    static CoreRuntime launch(Path dataDirectory, Integer port) throws Exception
    {
+      return launch(dataDirectory, port, "127.0.0.1");
+   }
+
+   static CoreRuntime launch(Path dataDirectory, Integer port, String bindHost) throws Exception
+   {
       CoreData.seed(dataDirectory);
       Integer brokerPort = findFreePort();
       Path brokerDirectory = dataDirectory.resolve("artemis").toAbsolutePath();
@@ -51,7 +56,7 @@ final class CoreRuntime implements AutoCloseable
             new QqqAllApplication(dataDirectory, brokerUrl),
             new QApplicationLauncherConfig().withRegisterShutdownHook(false)
                .withServerCustomizer(server -> server.withPort(port)
-                  .withJavalinConfigCustomizer(config -> config.jetty.host = "127.0.0.1")));
+                  .withJavalinConfigCustomizer(config -> config.jetty.host = bindHost)));
          return new CoreRuntime(broker, launcher);
       }
       catch(Exception | LinkageError e)

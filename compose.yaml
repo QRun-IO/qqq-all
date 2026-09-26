@@ -1,0 +1,285 @@
+name: qqq-all
+
+x-app-image: &app-image
+  build:
+    context: .
+  image: qqq-all:local
+  volumes:
+    - app-data:/app/data
+  ports:
+    - "127.0.0.1:${QQQ_ALL_PORT:-8080}:8080"
+  healthcheck:
+    test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/health"]
+    interval: 10s
+    timeout: 5s
+    retries: 6
+    start_period: 45s
+
+services:
+  app-core:
+    <<: *app-image
+    profiles: [core]
+    environment:
+      QQQ_ALL_PROFILE: core
+      QQQ_ALL_PORT: "8080"
+      QQQ_ALL_BIND_HOST: 0.0.0.0
+
+  app-full:
+    <<: *app-image
+    profiles: [full]
+    environment:
+      QQQ_ALL_PROFILE: full
+      QQQ_ALL_PORT: "8080"
+      QQQ_ALL_BIND_HOST: 0.0.0.0
+      QQQ_ALL_POSTGRES_HOST: postgres
+      QQQ_ALL_POSTGRES_DATABASE: ${POSTGRES_DATABASE:-qqq}
+      QQQ_ALL_POSTGRES_USER: ${POSTGRES_USER:-qqq}
+      QQQ_ALL_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      QQQ_ALL_MYSQL_HOST: mysql
+      QQQ_ALL_MYSQL_DATABASE: ${MYSQL_DATABASE:-qqq}
+      QQQ_ALL_MYSQL_USER: ${MYSQL_USER:-qqq}
+      QQQ_ALL_MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
+      QQQ_ALL_MONGO_HOST: mongo
+      QQQ_ALL_MONGO_DATABASE: ${MONGO_DATABASE:-qqq}
+      QQQ_ALL_MONGO_USER: ${MONGO_USER:-qqq}
+      QQQ_ALL_MONGO_PASSWORD: ${MONGO_PASSWORD:?set MONGO_PASSWORD}
+      QQQ_ALL_MONGO_REPLICA_SET: ${MONGO_REPLICA_SET:-rs0}
+      QQQ_ALL_S3_ENDPOINT: http://minio:9000
+      QQQ_ALL_S3_BUCKET: ${MINIO_BUCKET:-qqq-demo}
+      QQQ_ALL_S3_ACCESS_KEY: ${MINIO_ROOT_USER:-qqq}
+      QQQ_ALL_S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+      QQQ_ALL_SFTP_HOST: sftp
+      QQQ_ALL_SFTP_USER: ${SFTP_USER:-qqq}
+      QQQ_ALL_SFTP_PASSWORD: ${SFTP_PASSWORD:?set SFTP_PASSWORD}
+      QQQ_ALL_ARTEMIS_URL: tcp://artemis:61616
+      QQQ_ALL_RABBITMQ_URL: amqp://rabbitmq:5672/%2F
+      QQQ_ALL_RABBITMQ_USER: ${RABBITMQ_USER:-qqq}
+      QQQ_ALL_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}
+      QQQ_ALL_SMTP_HOST: mailpit
+      QQQ_ALL_OIDC_BASE_URL: http://keycloak.localhost:${KEYCLOAK_PORT:-8081}/realms/qqq-all
+      QQQ_ALL_OIDC_CLIENT_ID: qqq-all
+      QQQ_ALL_OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?set OIDC_CLIENT_SECRET}
+    depends_on:
+      postgres: {condition: service_healthy}
+      mysql: {condition: service_healthy}
+      mongo-init: {condition: service_completed_successfully}
+      minio-init: {condition: service_completed_successfully}
+      sftp: {condition: service_healthy}
+      opensearch: {condition: service_healthy}
+      artemis: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      mailpit: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: [full]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DATABASE:-qqq}
+      POSTGRES_USER: ${POSTGRES_USER:-qqq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mysql:
+    image: mysql:8.4
+    profiles: [full]
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-qqq}
+      MYSQL_USER: ${MYSQL_USER:-qqq}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./infra/mysql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  mongo:
+    image: mongo:7
+    profiles: [full]
+    entrypoint: ["bash", "/start.sh"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-qqq}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?set MONGO_PASSWORD}
+      MONGO_REPLICA_SET: ${MONGO_REPLICA_SET:-rs0}
+      MONGO_KEYFILE: ${MONGO_KEYFILE:?set MONGO_KEYFILE}
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+      - ./infra/mongo/start.sh:/start.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'db.adminCommand({ping:1}).ok' | grep -q 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mongo-init:
+    image: mongo:7
+    profiles: [full]
+    depends_on:
+      mongo: {condition: service_healthy}
+    environment:
+      MONGO_REPLICA_SET: ${MONGO_REPLICA_SET:-rs0}
+      MONGO_USER: ${MONGO_USER:-qqq}
+      MONGO_PASSWORD: ${MONGO_PASSWORD:?set MONGO_PASSWORD}
+    volumes:
+      - ./infra/mongo/init.sh:/init.sh:ro
+    entrypoint: ["bash", "/init.sh"]
+    restart: "no"
+
+  minio:
+    build:
+      context: ./infra/minio
+    image: qqq-all-minio:local
+    profiles: [full]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-qqq}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "127.0.0.1:9001:9001"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio-init:
+    image: public.ecr.aws/aws-cli/aws-cli:2.27.41
+    profiles: [full]
+    depends_on:
+      minio: {condition: service_healthy}
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-qqq}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD}
+      AWS_DEFAULT_REGION: us-east-1
+      MINIO_BUCKET: ${MINIO_BUCKET:-qqq-demo}
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["aws --endpoint-url http://minio:9000 s3api head-bucket --bucket \"$$MINIO_BUCKET\" >/dev/null 2>&1 || aws --endpoint-url http://minio:9000 s3api create-bucket --bucket \"$$MINIO_BUCKET\""]
+    restart: "no"
+
+  sftp:
+    image: atmoz/sftp:alpine
+    profiles: [full]
+    command: "${SFTP_USER:-qqq}:${SFTP_PASSWORD:?set SFTP_PASSWORD}:1001:1001:upload"
+    volumes:
+      - sftp-data:/home/${SFTP_USER:-qqq}/upload
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep sshd >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  opensearch:
+    image: opensearchproject/opensearch:2.19.1
+    profiles: [full]
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:9200/_cluster/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  artemis:
+    image: apache/activemq-artemis:2.42.0-alpine
+    profiles: [full]
+    environment:
+      ARTEMIS_USER: ${ARTEMIS_USER:-qqq}
+      ARTEMIS_PASSWORD: ${ARTEMIS_PASSWORD:?set ARTEMIS_PASSWORD}
+      ANONYMOUS_LOGIN: "true"
+    volumes:
+      - artemis-data:/var/lib/artemis-instance
+    ports:
+      - "127.0.0.1:8161:8161"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8161/console/"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    profiles: [full]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-qqq}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    ports:
+      - "127.0.0.1:15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:v1.22.3
+    profiles: [full]
+    ports:
+      - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8025/api/v1/info"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.2.5
+    profiles: [full]
+    networks:
+      default:
+        aliases: [keycloak.localhost]
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD}
+      KC_HEALTH_ENABLED: "true"
+      KC_HOSTNAME: http://keycloak.localhost:${KEYCLOAK_PORT:-8081}
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_PORT: ${KEYCLOAK_PORT:-8081}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?set OIDC_CLIENT_SECRET}
+      DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:?set DEMO_ADMIN_PASSWORD}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:?set DEMO_USER_PASSWORD}
+      QQQ_ALL_PORT: ${QQQ_ALL_PORT:-8080}
+    volumes:
+      - ./infra/keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+    ports:
+      - "127.0.0.1:${KEYCLOAK_PORT:-8081}:${KEYCLOAK_PORT:-8081}"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "{ printf 'HEAD /health/ready HTTP/1.0\r\n\r\n' >&0; grep 'HTTP/1.0 200'; } 0<>/dev/tcp/127.0.0.1/9000"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+volumes:
+  app-data:
+  postgres-data:
+  mysql-data:
+  mongo-data:
+  mongo-config:
+  minio-data:
+  sftp-data:
+  opensearch-data:
+  artemis-data:
+  rabbitmq-data:
