@@ -15,10 +15,18 @@ from smoke import check_full
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def free_port():
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        return listener.getsockname()[1]
+def free_port(exclude=()):
+    for _ in range(30):
+        port = 20000 + secrets.randbelow(10000)
+        if port in exclude:
+            continue
+        try:
+            with socket.socket() as listener:
+                listener.bind(("127.0.0.1", port))
+                return port
+        except OSError:
+            continue
+    raise AssertionError("could not reserve a full smoke host port")
 
 
 def demo_environment():
@@ -30,9 +38,22 @@ def demo_environment():
         if "PASSWORD" in key or "SECRET" in key or key == "MONGO_KEYFILE":
             value = secrets.token_urlsafe(24)
         values[key] = value
-    values["QQQ_ALL_PORT"] = str(free_port())
-    values["KEYCLOAK_PORT"] = str(free_port())
+    app_port = free_port()
+    values["QQQ_ALL_PORT"] = str(app_port)
+    values["KEYCLOAK_PORT"] = str(free_port((app_port,)))
     return values
+
+
+def published_port(command, service, target, environment):
+    result = subprocess.run(command + ["port", service, str(target)],
+                            cwd=ROOT, env=environment, capture_output=True, text=True,
+                            timeout=15, check=False)
+    if result.returncode:
+        raise AssertionError(f"could not discover {service} host port")
+    address = result.stdout.strip()
+    if not address.startswith("127.0.0.1:") or not address.rsplit(":", 1)[1].isdigit():
+        raise AssertionError(f"unexpected {service} host port")
+    return int(address.rsplit(":", 1)[1])
 
 
 def main():
@@ -55,10 +76,12 @@ def main():
                                      stderr=subprocess.DEVNULL, timeout=480, check=False)
             if started.returncode:
                 raise AssertionError("full Compose stack did not become healthy")
+            search_port = published_port(command, "opensearch", 9200, environment)
+            rabbit_port = published_port(command, "rabbitmq", 15672, environment)
             check_full(
                 f"http://127.0.0.1:{values['QQQ_ALL_PORT']}",
                 f"http://keycloak.localhost:{values['KEYCLOAK_PORT']}/realms/qqq-all",
-                "http://127.0.0.1:9200", "http://127.0.0.1:15672", 120,
+                f"http://127.0.0.1:{search_port}", f"http://127.0.0.1:{rabbit_port}", 120,
             )
         finally:
             subprocess.run(command + ["down", "--volumes", "--remove-orphans"],

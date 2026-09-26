@@ -2,6 +2,7 @@
 """Contract tests for the HTTP smoke checks, without starting the application."""
 
 import json
+import shutil
 import socketserver
 import subprocess
 import sys
@@ -10,8 +11,11 @@ import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from unittest import mock
 
 from smoke import SmokeClient, check_artemis_round_trip, check_core, check_rabbitmq, check_tables, CORE_TABLES
+import run_full_smoke
+from run_full_smoke import ROOT
 
 
 class SmokeServer(ThreadingHTTPServer):
@@ -94,6 +98,20 @@ class SmokeTest(unittest.TestCase):
             )
             self.assertEqual(1, result.returncode)
             self.assertIn("packaged app exited", result.stderr)
+
+    def test_full_runner_reserves_distinct_non_ephemeral_app_ports(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".env.example").write_text(
+                "QQQ_ALL_PORT=8080\nKEYCLOAK_PORT=8081\nPOSTGRES_PASSWORD=example\n")
+            with mock.patch.object(run_full_smoke, "ROOT", root):
+                values = run_full_smoke.demo_environment()
+            app_port = int(values["QQQ_ALL_PORT"])
+            keycloak_port = int(values["KEYCLOAK_PORT"])
+            self.assertTrue(20000 <= app_port < 30000)
+            self.assertTrue(20000 <= keycloak_port < 30000)
+            self.assertNotEqual(app_port, keycloak_port)
+            self.assertNotEqual("example", values["POSTGRES_PASSWORD"])
 
     def test_core_checks_public_http_behavior(self):
         server = SmokeServer(("127.0.0.1", 0), DemoHandler)
@@ -222,6 +240,25 @@ class SmokeTest(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join()
+
+    @unittest.skipUnless((ROOT / "compose.yaml").is_file() and shutil.which("docker"),
+                         "C6 Compose integration is not available")
+    def test_full_smoke_uses_ephemeral_loopback_service_ports(self):
+        command = ["docker", "compose", "--env-file", str(ROOT / ".env.example"),
+                   "-f", str(ROOT / "compose.yaml"),
+                   "-f", str(ROOT / "scripts/compose.smoke.yaml"),
+                   "--profile", "full", "config", "--format", "json"]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=15)
+        self.assertEqual(0, result.returncode, "full smoke Compose config failed")
+        services = json.loads(result.stdout)["services"]
+        for service, target in (("opensearch", 9200), ("rabbitmq", 15672),
+                                ("artemis", 8161), ("mailpit", 8025), ("minio", 9001)):
+            with self.subTest(service=service):
+                ports = services[service]["ports"]
+                self.assertEqual(1, len(ports))
+                self.assertEqual(target, ports[0]["target"])
+                self.assertEqual("127.0.0.1", ports[0]["host_ip"])
+                self.assertFalse(ports[0].get("published"))
 
 
 if __name__ == "__main__":

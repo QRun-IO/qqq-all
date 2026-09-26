@@ -26,7 +26,8 @@ CORE_SEEDS = (
     ("product", "name", "QRun Starter Kit"),
 )
 FULL_TABLES = CORE_TABLES + (
-    "warehouseCustomer", "supplierOrder", "shipment", "document", "externalImportFile"
+    "warehouseCustomer", "supplierOrder", "shipment", "document", "externalImportFile",
+    "SFTPImportSourceFileTable",
 )
 CORE_ADMIN_SESSION = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 
