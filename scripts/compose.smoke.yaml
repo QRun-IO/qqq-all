@@ -2,9 +2,6 @@ services:
   app-full:
     environment:
       QQQ_ALL_OPENSEARCH_HOST: opensearch
-  opensearch:
-    ports: !override
-      - "127.0.0.1::9200"
   rabbitmq:
     ports: !override
       - "127.0.0.1::15672"

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Contract tests for the HTTP smoke checks, without starting the application."""
 
+import http.cookiejar
 import json
 import os
 import shutil
@@ -10,6 +11,8 @@ import sys
 import tempfile
 import threading
 import unittest
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
@@ -146,6 +149,124 @@ class SmokeTest(unittest.TestCase):
                   mock.patch.dict(os.environ, {}, clear=False)):
                 run_full_smoke.main()
                 check.assert_called_once()
+
+    def test_full_runner_queries_private_opensearch_service(self):
+        command = ["docker", "compose", "-p", "smoke"]
+        with mock.patch.object(run_full_smoke.subprocess, "run",
+                               return_value=subprocess.CompletedProcess([], 0,
+                                   stdout='{"hits":{"hits":[]}}')) as invoke:
+            result = run_full_smoke.query_opensearch(command, {}, "customers", {"query": {}})
+        self.assertEqual([], result["hits"]["hits"])
+        args = invoke.call_args.args[0]
+        self.assertEqual(["exec", "-T", "opensearch", "curl"], args[len(command):len(command) + 4])
+        self.assertIn("http://127.0.0.1:9200/customers/_search", args)
+
+    def test_full_runner_fails_when_private_opensearch_query_fails(self):
+        with mock.patch.object(run_full_smoke.subprocess, "run",
+                               return_value=subprocess.CompletedProcess([], 22, stdout="")):
+            with self.assertRaisesRegex(AssertionError, "OpenSearch query failed"):
+                run_full_smoke.query_opensearch(["docker", "compose"], {}, "customers", {"query": {}})
+
+    def test_full_runner_prepares_sftp_import_directory(self):
+        command = ["docker", "compose", "-p", "smoke"]
+        with mock.patch.object(run_full_smoke.subprocess, "run",
+                               return_value=subprocess.CompletedProcess([], 0)) as invoke:
+            run_full_smoke.prepare_sftp_import_directory(command, {}, "qqq")
+        self.assertEqual([
+            command + ["exec", "-T", "sftp", "mkdir", "-p", "/home/qqq/upload/imports"],
+            command + ["exec", "-T", "sftp", "chown", "1001:1001", "/home/qqq/upload/imports"],
+        ], [call.args[0] for call in invoke.call_args_list])
+
+    def test_full_runner_fails_when_sftp_fixture_cannot_be_prepared(self):
+        with mock.patch.object(run_full_smoke.subprocess, "run", side_effect=[
+            subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 1)]):
+            with self.assertRaisesRegex(AssertionError, "SFTP import directory"):
+                run_full_smoke.prepare_sftp_import_directory(["docker", "compose"], {}, "qqq")
+
+    def test_oidc_cookie_is_sent_only_to_loopback_http_app(self):
+        from smoke import allow_loopback_http_session
+
+        class SecureSession(DemoHandler):
+            def do_GET(self):
+                if self.path in ("/login", "/login-plain"):
+                    data = b"ok"
+                    self.send_response(200)
+                    secure = "; Secure" if self.path == "/login" else ""
+                    self.send_header("Set-Cookie", "sessionUUID=test-session; Path=/; HttpOnly" + secure)
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+                if self.path == "/protected":
+                    if "sessionUUID=test-session" not in self.headers.get("Cookie", ""):
+                        return self.send_error(403)
+                    return self.send_json({"ok": True})
+                return super().do_GET()
+
+        server = SmokeServer(("127.0.0.1", 0), SecureSession)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            client = SmokeClient(f"http://127.0.0.1:{server.server_port}")
+            client.request("/login")
+            with self.assertRaisesRegex(AssertionError, "HTTP 403"):
+                client.request("/protected")
+            allow_loopback_http_session(client)
+            self.assertTrue(client.json("/protected")["ok"])
+            plain = SmokeClient(f"http://127.0.0.1:{server.server_port}")
+            plain.request("/login-plain")
+            allow_loopback_http_session(plain)
+            self.assertTrue(plain.json("/protected")["ok"])
+            remote = SmokeClient("http://example.com")
+            with self.assertRaisesRegex(AssertionError, "loopback"):
+                allow_loopback_http_session(remote)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+    def test_keycloak_secure_auth_cookie_is_sent_on_loopback_http(self):
+        from smoke import allow_loopback_http_cookies
+
+        class SecureKeycloak(DemoHandler):
+            def do_GET(self):
+                if self.path == "/auth":
+                    data = b"login"
+                    self.send_response(200)
+                    self.send_header("Set-Cookie", "AUTH_SESSION_ID=test-auth; Path=/; Secure; HttpOnly")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    self.wfile.write(data)
+                    return
+                return super().do_GET()
+
+            def do_POST(self):
+                if self.path == "/login":
+                    if "AUTH_SESSION_ID=test-auth" not in self.headers.get("Cookie", ""):
+                        return self.send_error(400)
+                    return self.send_json({"ok": True})
+                return super().do_POST()
+
+        server = SmokeServer(("127.0.0.1", 0), SecureKeycloak)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base = f"http://127.0.0.1:{server.server_port}"
+            cookies = http.cookiejar.CookieJar()
+            browser = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cookies))
+            browser.open(base + "/auth", timeout=2).close()
+            with self.assertRaises(urllib.error.HTTPError) as denied:
+                browser.open(urllib.request.Request(base + "/login", data=b"x"), timeout=2)
+            denied.exception.close()
+            allow_loopback_http_cookies(cookies, base)
+            with browser.open(urllib.request.Request(base + "/login", data=b"x"), timeout=2) as response:
+                self.assertEqual({"ok": True}, json.load(response))
+            with self.assertRaisesRegex(AssertionError, "loopback"):
+                allow_loopback_http_cookies(cookies, "http://example.com")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
 
     def test_core_checks_public_http_behavior(self):
         server = SmokeServer(("127.0.0.1", 0), DemoHandler)
@@ -301,7 +422,7 @@ class SmokeTest(unittest.TestCase):
 
     @unittest.skipUnless((ROOT / "compose.yaml").is_file() and shutil.which("docker"),
                          "C6 Compose integration is not available")
-    def test_full_smoke_uses_ephemeral_loopback_service_ports(self):
+    def test_full_smoke_keeps_opensearch_private_and_uses_ephemeral_service_ports(self):
         command = ["docker", "compose", "--env-file", str(ROOT / ".env.example"),
                    "-f", str(ROOT / "compose.yaml"),
                    "-f", str(ROOT / "scripts/compose.smoke.yaml"),
@@ -309,7 +430,8 @@ class SmokeTest(unittest.TestCase):
         result = subprocess.run(command, capture_output=True, text=True, timeout=15)
         self.assertEqual(0, result.returncode, "full smoke Compose config failed")
         services = json.loads(result.stdout)["services"]
-        for service, target in (("opensearch", 9200), ("rabbitmq", 15672),
+        self.assertNotIn("ports", services["opensearch"])
+        for service, target in (("rabbitmq", 15672),
                                 ("artemis", 8161), ("mailpit", 8025), ("minio", 9001)):
             with self.subTest(service=service):
                 ports = services[service]["ports"]

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Boot a private full Compose stack, run HTTP smoke checks, and remove it."""
 
+import json
 import os
 import secrets
 import socket
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 from pathlib import Path
 
 from smoke import check_full
@@ -56,6 +58,35 @@ def published_port(command, service, target, environment):
     return int(address.rsplit(":", 1)[1])
 
 
+def query_opensearch(command, environment, index_name, query):
+    url = ("http://127.0.0.1:9200/" + urllib.parse.quote(index_name, safe="")
+           + "/_search")
+    result = subprocess.run(
+        command + ["exec", "-T", "opensearch", "curl", "--fail", "--silent",
+                   "--show-error", "--max-time", "5", "-H", "Content-Type: application/json",
+                   "--data-binary", json.dumps(query), url],
+        cwd=ROOT, env=environment, capture_output=True, text=True, timeout=15, check=False,
+    )
+    if result.returncode:
+        raise AssertionError("OpenSearch query failed inside Compose")
+    try:
+        return json.loads(result.stdout)
+    except ValueError:
+        raise AssertionError("OpenSearch returned invalid JSON") from None
+
+
+def prepare_sftp_import_directory(command, environment, username):
+    path = f"/home/{username}/upload/imports"
+    for args in (["mkdir", "-p", path], ["chown", "1001:1001", path]):
+        result = subprocess.run(
+            command + ["exec", "-T", "sftp"] + args,
+            cwd=ROOT, env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=15, check=False,
+        )
+        if result.returncode:
+            raise AssertionError("could not prepare SFTP import directory")
+
+
 def main():
     if not (ROOT / "compose.yaml").is_file():
         raise AssertionError("C6 Compose is not integrated into this branch")
@@ -77,12 +108,13 @@ def main():
                                      stderr=subprocess.DEVNULL, timeout=480, check=False)
             if started.returncode:
                 raise AssertionError("full Compose stack did not become healthy")
-            search_port = published_port(command, "opensearch", 9200, environment)
+            prepare_sftp_import_directory(command, environment, values.get("SFTP_USER", "qqq"))
             rabbit_port = published_port(command, "rabbitmq", 15672, environment)
             check_full(
                 f"http://127.0.0.1:{values['QQQ_ALL_PORT']}",
                 f"http://keycloak.localhost:{values['KEYCLOAK_PORT']}/realms/qqq-all",
-                f"http://127.0.0.1:{search_port}", f"http://127.0.0.1:{rabbit_port}", 120,
+                lambda index, query: query_opensearch(command, environment, index, query),
+                f"http://127.0.0.1:{rabbit_port}", 120,
             )
         finally:
             subprocess.run(command + ["down", "--volumes", "--remove-orphans"],
