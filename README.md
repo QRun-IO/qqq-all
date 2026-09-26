@@ -6,9 +6,9 @@ An evolving reference app for QQQ 4.1. The `core` profile runs locally from one 
 
 ## Quick start
 
-From the repository root, install Java 21 and Maven, then build the app and its BOM with `mvn -B -pl qqq-all-app -am verify`. This needs access to the QQQ 4.1 snapshot dependencies described in the [app guide](qqq-all-app/README.md).
+From the repository root, install Java 21 and Maven, then build the app and its BOM with `mvn -B verify`. This needs access to the QQQ 4.1 snapshot dependencies described in the [app guide](qqq-all-app/README.md).
 
-**Core:** run `java -jar qqq-all-app/target/qqq-all-app-4.1.0-SNAPSHOT.jar`. Open `http://127.0.0.1:8080/`; `/health` is the health endpoint. The app seeds its local data under `./data` on first start. Set `QQQ_ALL_PORT` or `QQQ_ALL_DATA_DIR` to change those defaults. Core uses mock demo identities, so keep it on the loopback address.
+**Core:** run `java -jar qqq-all-app/target/qqq-all-app-4.1.0-SNAPSHOT.jar`. Open `http://127.0.0.1:8080/`; `/health` is the health endpoint. The app stores local data under `./data` and merges sample customer and order rows on every start, which can reset edits to those rows. Set `QQQ_ALL_PORT` or `QQQ_ALL_DATA_DIR` to change those defaults. Core uses mock demo identities, so keep it on the loopback address.
 
 **Full:** first provision PostgreSQL, MySQL, a MongoDB replica set, MinIO, SFTP, Artemis, RabbitMQ, Mailpit, Keycloak, and the required schemas and bucket. Set the `QQQ_ALL_*` variables listed in the [app guide](qqq-all-app/README.md). Then run `QQQ_ALL_PROFILE=full QQQ_ALL_BIND_HOST=127.0.0.1 java -jar qqq-all-app/target/qqq-all-app-4.1.0-SNAPSHOT.jar`. Full does not start those services itself; the Compose setup is still in C6. Keep `QQQ_ALL_BIND_HOST` on loopback for a local demo.
 
