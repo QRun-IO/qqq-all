@@ -50,7 +50,8 @@ final class CoreRuntime implements AutoCloseable
          QApplicationLauncher launcher = QApplicationLauncher.run(
             new QqqAllApplication(dataDirectory, brokerUrl),
             new QApplicationLauncherConfig().withRegisterShutdownHook(false)
-               .withServerCustomizer(server -> server.withPort(port)));
+               .withServerCustomizer(server -> server.withPort(port)
+                  .withJavalinConfigCustomizer(config -> config.jetty.host = "127.0.0.1")));
          return new CoreRuntime(broker, launcher);
       }
       catch(Exception | LinkageError e)
