@@ -37,6 +37,7 @@
 
    <modules>
       <module>qqq-all-bom</module>
+      <module>qqq-all-bom-test</module>
       <module>qqq-all-app</module>
    </modules>
 
