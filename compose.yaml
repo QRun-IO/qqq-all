@@ -52,9 +52,13 @@ services:
       QQQ_ALL_SFTP_USER: ${SFTP_USER:-qqq}
       QQQ_ALL_SFTP_PASSWORD: ${SFTP_PASSWORD:?set SFTP_PASSWORD}
       QQQ_ALL_ARTEMIS_URL: tcp://artemis:61616
+      QQQ_ALL_ARTEMIS_USER: ${ARTEMIS_USER:-qqq}
+      QQQ_ALL_ARTEMIS_PASSWORD: ${ARTEMIS_PASSWORD:?set ARTEMIS_PASSWORD}
+      QQQ_ALL_ARTEMIS_MANAGEMENT_URL: http://artemis:8161
       QQQ_ALL_RABBITMQ_URL: amqp://rabbitmq:5672/%2F
       QQQ_ALL_RABBITMQ_USER: ${RABBITMQ_USER:-qqq}
       QQQ_ALL_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}
+      QQQ_ALL_RABBITMQ_MANAGEMENT_URL: http://rabbitmq:15672
       QQQ_ALL_SMTP_HOST: mailpit
       QQQ_ALL_OIDC_BASE_URL: http://keycloak.localhost:${KEYCLOAK_PORT:-8081}/realms/qqq-all
       QQQ_ALL_OIDC_CLIENT_ID: qqq-all
@@ -205,7 +209,7 @@ services:
     environment:
       ARTEMIS_USER: ${ARTEMIS_USER:-qqq}
       ARTEMIS_PASSWORD: ${ARTEMIS_PASSWORD:?set ARTEMIS_PASSWORD}
-      ANONYMOUS_LOGIN: "true"
+      ANONYMOUS_LOGIN: "false"
     volumes:
       - artemis-data:/var/lib/artemis-instance
     ports:

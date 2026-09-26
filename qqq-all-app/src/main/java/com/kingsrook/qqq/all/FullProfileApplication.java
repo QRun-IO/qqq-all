@@ -162,9 +162,19 @@ final class FullProfileApplication extends AbstractQQQApplication
    private void addEsb(QInstance instance)
    {
       EsbInstanceMetaData.of(instance)
+         .getProvider("artemis")
+         .withUsername(settings.get("ARTEMIS_USER"))
+         .withPassword(settings.get("ARTEMIS_PASSWORD"))
+         .withManagementUrl(settings.get("ARTEMIS_MANAGEMENT_URL"))
+         .withManagementUsername(settings.get("ARTEMIS_USER"))
+         .withManagementPassword(settings.get("ARTEMIS_PASSWORD"));
+      EsbInstanceMetaData.of(instance)
          .withProvider(new QEsbProviderMetaData().withName("rabbitmq")
             .withType(EsbProviderType.RABBITMQ).withUrl(settings.get("RABBITMQ_URL"))
-            .withUsername(settings.get("RABBITMQ_USER")).withPassword(settings.get("RABBITMQ_PASSWORD")))
+            .withUsername(settings.get("RABBITMQ_USER")).withPassword(settings.get("RABBITMQ_PASSWORD"))
+            .withManagementUrl(settings.get("RABBITMQ_MANAGEMENT_URL"))
+            .withManagementUsername(settings.get("RABBITMQ_USER"))
+            .withManagementPassword(settings.get("RABBITMQ_PASSWORD")))
          .withDestination(new QEsbDestinationMetaData().withName("orderSyncEvents")
             .withType(EsbDestinationType.QUEUE).withProviderName("rabbitmq")
             .withDestinationName("qqq.all.orderSyncEvents"));

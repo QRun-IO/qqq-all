@@ -40,7 +40,9 @@ The app is at `http://127.0.0.1:8080/health` (change `QQQ_ALL_PORT` in `.env` if
 
 The full stack initializes the MongoDB replica set, MinIO bucket, sample SQL tables, OAuth2 session tables, and demo roles/permissions. PostgreSQL and MySQL initialization scripts run only when their data volumes are first created. To stop, run `docker compose --profile full down`; adding `--volumes` removes demo data. See [the app guide](qqq-all-app/README.md) for the full-profile environment contract.
 
-On merges to `develop`, [the image workflow](.github/workflows/publish-image.yml) verifies the reactor and pushes `ghcr.io/qrun-io/qqq-all:develop`. GitHub creates a new container package private by default; an organization owner must set the `qqq-all` package visibility to **public** once in GitHub package settings. The workflow checks that visibility and fails until it is public.
+Artemis requires a configured login on a fresh volume. If an older demo volume was created with anonymous login enabled, recreate that volume before relying on the new setting; `docker compose --profile full down --volumes` resets all local demo data.
+
+On merges to `develop`, [the image workflow](.github/workflows/publish-image.yml) checks that the `qqq-all` container package is already public, verifies the reactor, and pushes `ghcr.io/qrun-io/qqq-all:develop`. GitHub creates a new container package private by default, so the first image requires a deliberate, one-time bootstrap: an organization owner publishes an initial image, then changes the package visibility to **public** in GitHub package settings. Until that is done, the workflow fails before any image push. Do not enable automatic develop publication until the package is public.
 
 ## Contributing
 

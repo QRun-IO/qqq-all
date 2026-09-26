@@ -26,8 +26,19 @@ Configure the following environment variables before starting the same jar:
 | MongoDB replica set | `QQQ_ALL_MONGO_HOST`, `QQQ_ALL_MONGO_DATABASE`, `QQQ_ALL_MONGO_USER`, `QQQ_ALL_MONGO_PASSWORD`, `QQQ_ALL_MONGO_REPLICA_SET` | `QQQ_ALL_MONGO_PORT` (27017), `QQQ_ALL_MONGO_AUTH_DATABASE` (admin) |
 | MinIO S3 | `QQQ_ALL_S3_ENDPOINT`, `QQQ_ALL_S3_BUCKET`, `QQQ_ALL_S3_ACCESS_KEY`, `QQQ_ALL_S3_SECRET_KEY` | `QQQ_ALL_S3_REGION` (us-east-1) |
 | SFTP | `QQQ_ALL_SFTP_HOST`, `QQQ_ALL_SFTP_USER`, `QQQ_ALL_SFTP_PASSWORD` | `QQQ_ALL_SFTP_PORT` (22), `QQQ_ALL_SFTP_BASE_PATH` (/upload) |
-| ESB | `QQQ_ALL_ARTEMIS_URL`, `QQQ_ALL_RABBITMQ_URL`, `QQQ_ALL_RABBITMQ_USER`, `QQQ_ALL_RABBITMQ_PASSWORD` | — |
+| ESB | `QQQ_ALL_ARTEMIS_URL`, `QQQ_ALL_ARTEMIS_USER`, `QQQ_ALL_ARTEMIS_PASSWORD`, `QQQ_ALL_ARTEMIS_MANAGEMENT_URL`, `QQQ_ALL_RABBITMQ_URL`, `QQQ_ALL_RABBITMQ_USER`, `QQQ_ALL_RABBITMQ_PASSWORD`, `QQQ_ALL_RABBITMQ_MANAGEMENT_URL` | — |
 | Mailpit SMTP | `QQQ_ALL_SMTP_HOST` | `QQQ_ALL_SMTP_PORT` (1025) |
 | Keycloak OIDC | `QQQ_ALL_OIDC_BASE_URL`, `QQQ_ALL_OIDC_CLIENT_ID`, `QQQ_ALL_OIDC_CLIENT_SECRET` | `QQQ_ALL_OIDC_EXTERNAL_BASE_URL` (base URL), `QQQ_ALL_OIDC_SCOPES` (`openid email profile`) |
 
 The full app adds sample tables on each external backend, `orderEvents` on Artemis, and `orderSyncEvents` on RabbitMQ. Keycloak realm roles resolve by name against the PostgreSQL `role` table from `qbit-user-role-permissions`, then become QQQ session permissions. Unknown roles receive no permissions. The Compose profile provisions demo SQL tables, OAuth session and redirect-state tables, qbit permission tables and roles, and the MinIO bucket on first startup.
+
+After starting the full Compose profile, run the opt-in broker management smoke test with the same broker credentials. For the supplied demo environment:
+
+```sh
+set -a
+. ./.env.example
+set +a
+QQQ_ALL_COMPOSE_BROKERS=true mvn -pl qqq-all-app -am -Dtest=FullProfileBrokerIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+The test uses the loopback management ports to read and pause/resume the Artemis subscription queue, then creates, reads, purges, and deletes a temporary RabbitMQ queue. For a customized `.env`, source that file instead. It is skipped during ordinary `mvn verify`.
