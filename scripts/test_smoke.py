@@ -383,19 +383,20 @@ class SmokeTest(unittest.TestCase):
 
     def test_rabbitmq_rejects_unrelated_completion(self):
         class WrongCompletion(DemoHandler):
-            def do_POST(self):
-                if self.path.startswith("/api/queues/"):
+            def do_GET(self):
+                if self.path == "/qqq/v1/esb/messages/orderSyncEvents":
                     event = {"type": "qqq.process.other.completed",
                              "data": {"processName": "other", "processUUID": "trace-1"}}
-                    return self.send_json([{"payload": json.dumps(event)}])
-                return super().do_POST()
+                    return self.send_json({"messages": [{"event": event}], "hasMore": False})
+                return super().do_GET()
 
         server = SmokeServer(("127.0.0.1", 0), WrongCompletion)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
+            client = SmokeClient(f"http://127.0.0.1:{server.server_port}")
             with self.assertRaisesRegex(AssertionError, "RabbitMQ syncOrder completion"):
-                check_rabbitmq(f"http://127.0.0.1:{server.server_port}", "qqq", "pw", 0.3, "trace-1")
+                check_rabbitmq(client, 0.3, "trace-1")
         finally:
             server.shutdown()
             server.server_close()
@@ -403,19 +404,20 @@ class SmokeTest(unittest.TestCase):
 
     def test_rabbitmq_rejects_wrong_process_uuid(self):
         class WrongRun(DemoHandler):
-            def do_POST(self):
-                if self.path.startswith("/api/queues/"):
+            def do_GET(self):
+                if self.path == "/qqq/v1/esb/messages/orderSyncEvents":
                     event = {"type": "qqq.process.syncOrder.completed",
                              "data": {"processName": "syncOrder", "processUUID": "other-run"}}
-                    return self.send_json([{"payload": json.dumps(event)}])
-                return super().do_POST()
+                    return self.send_json({"messages": [{"event": event}], "hasMore": False})
+                return super().do_GET()
 
         server = SmokeServer(("127.0.0.1", 0), WrongRun)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
+            client = SmokeClient(f"http://127.0.0.1:{server.server_port}")
             with self.assertRaisesRegex(AssertionError, "RabbitMQ syncOrder completion"):
-                check_rabbitmq(f"http://127.0.0.1:{server.server_port}", "qqq", "pw", 0.3, "trace-0")
+                check_rabbitmq(client, 0.3, "trace-0")
         finally:
             server.shutdown()
             server.server_close()
@@ -423,18 +425,43 @@ class SmokeTest(unittest.TestCase):
 
     def test_rabbitmq_accepts_matching_process_uuid(self):
         class MatchingRun(DemoHandler):
-            def do_POST(self):
-                if self.path.startswith("/api/queues/"):
+            def do_GET(self):
+                if self.path == "/qqq/v1/esb/messages/orderSyncEvents":
                     event = {"type": "qqq.process.syncOrder.completed",
                              "data": {"processName": "syncOrder", "processUUID": "trace-0"}}
-                    return self.send_json([{"payload": json.dumps(event)}])
-                return super().do_POST()
+                    return self.send_json({"messages": [{"event": event}], "hasMore": False})
+                return super().do_GET()
 
         server = SmokeServer(("127.0.0.1", 0), MatchingRun)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            check_rabbitmq(f"http://127.0.0.1:{server.server_port}", "qqq", "pw", 2, "trace-0")
+            client = SmokeClient(f"http://127.0.0.1:{server.server_port}")
+            check_rabbitmq(client, 2, "trace-0")
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+    def test_rabbitmq_finds_completion_after_first_browse_page(self):
+        class LaterPage(DemoHandler):
+            def do_GET(self):
+                if self.path == "/qqq/v1/esb/messages/orderSyncEvents":
+                    old = {"type": "qqq.process.syncOrder.completed",
+                           "data": {"processName": "syncOrder", "processUUID": "old-run"}}
+                    return self.send_json({"messages": [{"event": old}] * 50, "hasMore": True})
+                if self.path == "/qqq/v1/esb/messages/orderSyncEvents?offset=50":
+                    event = {"type": "qqq.process.syncOrder.completed",
+                             "data": {"processName": "syncOrder", "processUUID": "trace-0"}}
+                    return self.send_json({"messages": [{"event": event}], "hasMore": False})
+                return super().do_GET()
+
+        server = SmokeServer(("127.0.0.1", 0), LaterPage)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            client = SmokeClient(f"http://127.0.0.1:{server.server_port}")
+            check_rabbitmq(client, 2, "trace-0")
         finally:
             server.shutdown()
             server.server_close()

@@ -35,7 +35,15 @@ Configure the following environment variables before starting the same jar:
 
 The full app adds sample tables on each external backend, `orderEvents` on Artemis, and `orderSyncEvents` on RabbitMQ. Quick search is configured for customer `name` and `email`; run `quickSearchFullReindex` after OpenSearch and the customer data are ready. The SFTP integration adds its import source and staging tables plus `SFTPImportFileSyncProcess`; `externalImportFile` remains the direct SFTP file sample. Keycloak realm roles resolve by name against the PostgreSQL `role` table from `qbit-user-role-permissions`, then become QQQ session permissions. Unknown roles receive no permissions. Webhook tables and delivery processes require explicit permissions: the viewer role receives read access, while the admin role can edit destinations and run delivery. The Compose profile provisions demo SQL tables, OAuth session and redirect-state tables, qbit permission tables and roles, and the MinIO bucket on first startup; `infra/postgres/03-webhook-permissions.sql` adds webhook grants after the role seed.
 
-On startup, the full demo creates its remaining PostgreSQL qbit tables from the registered metadata and checks every expected column and type. The hand-maintained domain, OAuth, and role tables stay under `infra/postgres`. If a persisted qbit table is missing a required column or has a different type, startup fails with a migration/reset message instead of silently accepting it. The full-profile RabbitMQ completion-event smoke remains gated on QQQ ESB Task 9's metadata-driven process lifecycle publication; the broker management smoke below can run independently.
+The full-profile admin receives ESB service visibility, queue controls, and message deletion through `infra/postgres/04-esb-permissions.sql`; the viewer role does not. The full smoke checks the RabbitMQ process-completion event through QQQ's authenticated ESB message endpoint, which decodes the broker's JMS message. Fresh PostgreSQL volumes apply this SQL automatically. For a running full-profile stack with an existing volume, apply the idempotent grant file once:
+
+```bash
+COMPOSE_PROFILES=full docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < infra/postgres/04-esb-permissions.sql
+```
+
+Then sign in as Admin and open the ESB overview. The Viewer role must remain unable to open it.
+
+On startup, the full demo creates its remaining PostgreSQL qbit tables from the registered metadata and checks every expected column and type. The hand-maintained domain, OAuth, and role tables stay under `infra/postgres`. If a persisted qbit table is missing a required column or has a different type, startup fails with a migration/reset message instead of silently accepting it. The full-profile RabbitMQ completion-event smoke requires QQQ's process publishing and permission-scoped ESB message endpoint; the broker management smoke below can run independently.
 
 After starting the full Compose profile, run the opt-in broker management smoke test with the same broker credentials. For the supplied demo environment:
 

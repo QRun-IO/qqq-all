@@ -109,12 +109,11 @@ def main():
             if started.returncode:
                 raise AssertionError("full Compose stack did not become healthy")
             prepare_sftp_import_directory(command, environment, values.get("SFTP_USER", "qqq"))
-            rabbit_port = published_port(command, "rabbitmq", 15672, environment)
             check_full(
                 f"http://127.0.0.1:{values['QQQ_ALL_PORT']}",
                 f"http://keycloak.localhost:{values['KEYCLOAK_PORT']}/realms/qqq-all",
                 lambda index, query: query_opensearch(command, environment, index, query),
-                f"http://127.0.0.1:{rabbit_port}", 120,
+                120,
             )
         finally:
             subprocess.run(command + ["down", "--volumes", "--remove-orphans"],

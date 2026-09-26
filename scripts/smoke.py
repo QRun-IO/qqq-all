@@ -280,33 +280,34 @@ def check_quick_search(client, query_index, index_name, timeout):
     print("OpenSearch customer quick search: OK")
 
 
-def check_rabbitmq(rabbit_url, username, password, timeout, process_uuid):
-    credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-    request = urllib.request.Request(
-        rabbit_url.rstrip("/") + "/api/queues/%2F/qqq.all.orderSyncEvents/get",
-        data=b'{"count":10,"ackmode":"ack_requeue_true","encoding":"auto"}',
-        headers={"Authorization": "Basic " + credentials, "Content-Type": "application/json"},
-    )
-
+def check_rabbitmq(client, timeout, process_uuid):
     def message_arrived():
-        with urllib.request.urlopen(request, timeout=5) as response:
-            messages = json.load(response)
-        for message in messages:
-            try:
-                event = json.loads(message.get("payload", ""))
-            except ValueError:
-                continue
-            if (event.get("type") == "qqq.process.syncOrder.completed"
-                    and event.get("data", {}).get("processName") == "syncOrder"
-                    and event.get("data", {}).get("processUUID") == process_uuid):
-                return True
-        return False
+        offset = 0
+        while True:
+            suffix = "" if offset == 0 else f"?offset={offset}"
+            page = client.json("/qqq/v1/esb/messages/orderSyncEvents" + suffix)
+            messages = page.get("messages", [])
+            for message in messages:
+                event = message.get("event")
+                if not isinstance(event, dict):
+                    continue
+                data = event.get("data")
+                if (event.get("type") == "qqq.process.syncOrder.completed"
+                        and isinstance(data, dict)
+                        and data.get("processName") == "syncOrder"
+                        and data.get("processUUID") == process_uuid):
+                    return True
+            if not page.get("hasMore"):
+                return False
+            if not messages:
+                raise ValueError("ESB browse returned an empty page with more messages")
+            offset += len(messages)
 
     wait_for("RabbitMQ syncOrder completion", message_arrived, timeout)
     print("RabbitMQ completion publication: OK")
 
 
-def check_full(base_url, keycloak_url, query_index, rabbit_url, timeout):
+def check_full(base_url, keycloak_url, query_index, timeout):
     viewer = SmokeClient(base_url)
     check_health_and_dashboard(viewer, timeout)
     oidc_login(viewer, keycloak_url, "demo-user", os.environ["DEMO_USER_PASSWORD"])
@@ -316,8 +317,7 @@ def check_full(base_url, keycloak_url, query_index, rabbit_url, timeout):
     check_tables(admin, FULL_TABLES, require_seed=False)
     check_quick_search(admin, query_index, os.environ.get("QQQ_ALL_OPENSEARCH_INDEX", "qqq-all-customers"), timeout)
     process_uuid = check_artemis_round_trip(admin, timeout)
-    check_rabbitmq(rabbit_url, os.environ.get("RABBITMQ_USER", "qqq"),
-                   os.environ["RABBITMQ_PASSWORD"], timeout, process_uuid)
+    check_rabbitmq(admin, timeout, process_uuid)
 
 
 def main():
@@ -327,7 +327,6 @@ def main():
     parser.add_argument("--timeout", type=int, default=90)
     parser.add_argument("--keycloak-url", default="http://keycloak.localhost:8081/realms/qqq-all")
     parser.add_argument("--opensearch-url")
-    parser.add_argument("--rabbitmq-url", default="http://127.0.0.1:15672")
     args = parser.parse_args()
     client = SmokeClient(args.base_url, CORE_ADMIN_SESSION if args.profile == "core" else None)
     if args.profile == "core":
@@ -337,7 +336,7 @@ def main():
             raise AssertionError("full profile needs --opensearch-url; use run_full_smoke.py for private Compose")
         check_full(args.base_url, args.keycloak_url,
                    lambda index, query: http_query_index(args.opensearch_url, index, query),
-                   args.rabbitmq_url, args.timeout)
+                   args.timeout)
 
 
 if __name__ == "__main__":
