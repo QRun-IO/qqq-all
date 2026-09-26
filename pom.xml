@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+   <modelVersion>4.0.0</modelVersion>
+
+   <groupId>com.kingsrook.qqq</groupId>
+   <artifactId>qqq-all-parent</artifactId>
+   <version>${revision}</version>
+   <packaging>pom</packaging>
+
+   <name>QQQ All</name>
+   <description>QQQ with every feature configured and working out of the box: a tested stack BOM and a reference application.</description>
+   <url>https://github.com/QRun-IO/qqq-all</url>
+   <licenses>
+      <license>
+         <name>Apache License, Version 2.0</name>
+         <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+         <distribution>repo</distribution>
+      </license>
+   </licenses>
+   <scm>
+      <connection>scm:git:https://github.com/QRun-IO/qqq-all.git</connection>
+      <developerConnection>scm:git:ssh://git@github.com/QRun-IO/qqq-all.git</developerConnection>
+      <url>https://github.com/QRun-IO/qqq-all</url>
+      <tag>HEAD</tag>
+   </scm>
+   <developers>
+      <developer>
+         <id>kingsrook</id>
+         <name>Kingsrook, LLC</name>
+         <email>pub@qrun.io</email>
+         <organization>Kingsrook, LLC</organization>
+         <organizationUrl>https://qrun.io</organizationUrl>
+      </developer>
+   </developers>
+
+   <modules>
+      <module>qqq-all-bom</module>
+      <module>qqq-all-app</module>
+   </modules>
+
+   <properties>
+      <!-- qqq-all versions track QQQ versions. -->
+      <revision>4.1.0-SNAPSHOT</revision>
+
+      <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+      <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+      <maven.compiler.release>21</maven.compiler.release>
+   </properties>
+
+   <repositories>
+      <!-- QQQ 4.1.0-SNAPSHOT and other QRun-IO snapshots are published here until 4.1 ships. -->
+      <repository>
+         <id>central-portal-snapshots</id>
+         <name>Sonatype Central Portal Snapshots</name>
+         <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+         <releases>
+            <enabled>false</enabled>
+         </releases>
+         <snapshots>
+            <enabled>true</enabled>
+            <updatePolicy>always</updatePolicy>
+         </snapshots>
+      </repository>
+   </repositories>
+
+   <build>
+      <pluginManagement>
+         <!-- Pinned because CI's system Maven (3.6.3) defaults to plugins that predate maven.compiler.release and JUnit 5. -->
+         <plugins>
+            <plugin>
+               <groupId>org.apache.maven.plugins</groupId>
+               <artifactId>maven-resources-plugin</artifactId>
+               <version>3.3.1</version>
+            </plugin>
+            <plugin>
+               <groupId>org.apache.maven.plugins</groupId>
+               <artifactId>maven-compiler-plugin</artifactId>
+               <version>3.14.1</version>
+            </plugin>
+            <plugin>
+               <groupId>org.apache.maven.plugins</groupId>
+               <artifactId>maven-surefire-plugin</artifactId>
+               <version>3.5.4</version>
+            </plugin>
+            <plugin>
+               <groupId>org.apache.maven.plugins</groupId>
+               <artifactId>maven-jar-plugin</artifactId>
+               <version>3.4.2</version>
+            </plugin>
+         </plugins>
+      </pluginManagement>
+      <plugins>
+         <!-- Resolve ${revision} in installed and deployed POMs (CI sets it per branch). -->
+         <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>flatten-maven-plugin</artifactId>
+            <version>1.7.3</version>
+            <configuration>
+               <updatePomFile>true</updatePomFile>
+               <flattenMode>resolveCiFriendliesOnly</flattenMode>
+            </configuration>
+            <executions>
+               <execution>
+                  <id>flatten</id>
+                  <phase>process-resources</phase>
+                  <goals>
+                     <goal>flatten</goal>
+                  </goals>
+               </execution>
+               <execution>
+                  <id>flatten.clean</id>
+                  <phase>clean</phase>
+                  <goals>
+                     <goal>clean</goal>
+                  </goals>
+               </execution>
+            </executions>
+         </plugin>
+      </plugins>
+   </build>
+
+</project>
