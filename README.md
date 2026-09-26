@@ -19,6 +19,31 @@ Requires Java 21 and Maven.
 mvn -B verify
 ```
 
+## Run locally
+
+The core profile needs only Java 21:
+
+```bash
+java -jar qqq-all-app/target/qqq-all-app.jar
+```
+
+For containers, copy the demo settings and build the jar before starting either Compose profile:
+
+```bash
+cp .env.example .env
+mvn -B verify
+docker compose --profile core up --build --wait
+# Or: docker compose --profile full up --build --wait
+```
+
+The app is at `http://127.0.0.1:8080/health` (change `QQQ_ALL_PORT` in `.env` if needed). The full profile also publishes local-only management ports for Keycloak (`8081`), Mailpit (`8025`), MinIO (`9001`), Artemis/Jolokia (`8161`), and RabbitMQ (`15672`). The demo Keycloak users are `demo-admin` and `demo-user`; their passwords and the confidential client secret come from `.env`. The sample values in `.env.example` are for local demonstrations only. The default browser-visible issuer is `http://keycloak.localhost:8081`; if your host does not resolve `keycloak.localhost` to loopback, add that local hosts entry before trying OIDC login.
+
+The full stack initializes the MongoDB replica set, MinIO bucket, sample SQL tables, OAuth2 session tables, and demo roles/permissions. PostgreSQL and MySQL initialization scripts run only when their data volumes are first created. To stop, run `docker compose --profile full down`; adding `--volumes` removes demo data. See [the app guide](qqq-all-app/README.md) for the full-profile environment contract.
+
+Artemis requires a configured login on a fresh volume. If an older demo volume was created with anonymous login enabled, recreate that volume before relying on the new setting; `docker compose --profile full down --volumes` resets all local demo data.
+
+On merges to `develop`, [the image workflow](.github/workflows/publish-image.yml) verifies the reactor and publishes `ghcr.io/qrun-io/qqq-all:develop` only when the `qqq-all` container package is already public. If the package is absent, private, or cannot be read, image publication is skipped with a job summary while verification still runs. GitHub creates a new container package private by default, so the first image requires a deliberate, one-time bootstrap: an organization owner publishes an initial image, then changes the package visibility to **public** in GitHub package settings. Automatic develop publication starts only after that bootstrap.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), the [Code of Conduct](CODE_OF_CONDUCT.md), and the [security policy](SECURITY.md).

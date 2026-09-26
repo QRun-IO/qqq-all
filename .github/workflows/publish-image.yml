@@ -1,0 +1,48 @@
+name: Publish develop image
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check public package visibility
+        id: package_visibility
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if visibility="$(gh api /orgs/QRun-IO/packages/container/qqq-all --jq .visibility 2>/dev/null)" && [ "$visibility" = public ]; then
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+            echo 'The qqq-all container package is public; develop image publication is enabled.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            echo 'Skipped develop image publication: the qqq-all container package is not yet public or cannot be read. An owner must bootstrap the package and set it to Public before C9 enables publication.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Verify application
+        run: mvn -B -ntp verify
+      - uses: docker/login-action@v3
+        if: steps.package_visibility.outputs.publish == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish develop image
+        if: steps.package_visibility.outputs.publish == 'true'
+        run: |
+          docker build \
+            --label org.opencontainers.image.source=https://github.com/QRun-IO/qqq-all \
+            --tag ghcr.io/qrun-io/qqq-all:develop .
+          docker push ghcr.io/qrun-io/qqq-all:develop

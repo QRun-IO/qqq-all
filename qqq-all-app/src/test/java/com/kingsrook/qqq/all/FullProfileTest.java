@@ -15,6 +15,7 @@ import com.kingsrook.qqq.backend.core.model.metadata.authentication.OAuth2Authen
 import com.kingsrook.qqq.backend.core.model.metadata.QAuthenticationType;
 import com.kingsrook.qqq.backend.core.model.metadata.messaging.email.EmailMessagingProviderMetaData;
 import com.kingsrook.qqq.backend.module.mongodb.model.metadata.MongoDBBackendMetaData;
+import com.kingsrook.qqq.backend.module.rdbms.jdbc.ConnectionManager;
 import com.kingsrook.qqq.backend.module.rdbms.model.metadata.RDBMSBackendMetaData;
 import com.kingsrook.qqq.esb.model.EsbInstanceMetaData;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,12 @@ class FullProfileTest
       QInstance instance = new FullProfileApplication(dataDirectory, settings).defineQInstance();
       new QInstanceValidator().validate(instance);
 
-      assertEquals("postgres.example.test", ((RDBMSBackendMetaData) instance.getBackend("postgres")).getHostName());
+      RDBMSBackendMetaData postgres = (RDBMSBackendMetaData) instance.getBackend("postgres");
+      assertEquals("postgres.example.test", postgres.getHostName());
+      assertEquals("jdbc:postgresql://postgres.example.test:5432/qqq", ConnectionManager.getJdbcUrl(postgres));
+      assertEquals("org.postgresql.Driver", ConnectionManager.getJdbcDriverClassName(postgres));
+      assertEquals("\"", postgres.getActionStrategy().getIdentifierQuoteString());
+      assertEquals("DEFAULT VALUES", postgres.getActionStrategy().getInsertDefaultValuesClause());
       assertEquals("mysql.example.test", ((RDBMSBackendMetaData) instance.getBackend("mysql")).getHostName());
       assertEquals("replicaSet=rs0", ((MongoDBBackendMetaData) instance.getBackend("mongo")).getUrlSuffix());
       assertEquals("postgres", instance.getTable("warehouseCustomer").getBackendName());
@@ -56,7 +62,15 @@ class FullProfileTest
 
       EsbInstanceMetaData esb = EsbInstanceMetaData.of(instance);
       assertEquals("tcp://artemis.example.test:61616", esb.getProvider("artemis").getUrl());
+      assertEquals("fixture", esb.getProvider("artemis").getUsername());
+      assertEquals("fixture", esb.getProvider("artemis").getPassword());
+      assertEquals("http://artemis.example.test:8161", esb.getProvider("artemis").getManagementUrl());
+      assertEquals("fixture", esb.getProvider("artemis").getManagementUsername());
+      assertEquals("fixture", esb.getProvider("artemis").getManagementPassword());
       assertEquals("amqp://rabbit.example.test:5672/%2F", esb.getProvider("rabbitmq").getUrl());
+      assertEquals("http://rabbit.example.test:15672", esb.getProvider("rabbitmq").getManagementUrl());
+      assertEquals("fixture", esb.getProvider("rabbitmq").getManagementUsername());
+      assertEquals("fixture", esb.getProvider("rabbitmq").getManagementPassword());
       assertEquals("artemis", esb.getDestination("orderEvents").getProviderName());
       assertEquals("rabbitmq", esb.getDestination("orderSyncEvents").getProviderName());
 
@@ -94,7 +108,11 @@ class FullProfileTest
       values.put("QQQ_ALL_SFTP_USER", "fixture");
       values.put("QQQ_ALL_SFTP_PASSWORD", "fixture");
       values.put("QQQ_ALL_ARTEMIS_URL", "tcp://artemis.example.test:61616");
+      values.put("QQQ_ALL_ARTEMIS_USER", "fixture");
+      values.put("QQQ_ALL_ARTEMIS_PASSWORD", "fixture");
+      values.put("QQQ_ALL_ARTEMIS_MANAGEMENT_URL", "http://artemis.example.test:8161");
       values.put("QQQ_ALL_RABBITMQ_URL", "amqp://rabbit.example.test:5672/%2F");
+      values.put("QQQ_ALL_RABBITMQ_MANAGEMENT_URL", "http://rabbit.example.test:15672");
       values.put("QQQ_ALL_RABBITMQ_USER", "fixture");
       values.put("QQQ_ALL_RABBITMQ_PASSWORD", "fixture");
       values.put("QQQ_ALL_SMTP_HOST", "mailpit.example.test");

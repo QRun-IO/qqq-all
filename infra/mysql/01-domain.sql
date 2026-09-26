@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS supplier_order (
+   id INTEGER NOT NULL AUTO_INCREMENT PRIMARY KEY,
+   reference VARCHAR(120) NOT NULL
+);
+
+INSERT IGNORE INTO supplier_order (id, reference) VALUES (1, 'DEMO-SUPPLIER-001');
