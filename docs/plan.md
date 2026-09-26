@@ -15,7 +15,7 @@
 - Java 21. qqq `4.1.0-SNAPSHOT` until 4.1 GA, then `4.1.x`. qqq-all version tracks qqq.
 - Repos use gitflow: branch from and PR to `develop` (qqq-frontend-next: `main`). Never force-push; never delete branches you didn't create.
 - Maven: never `mvn install` while other agents build; use `-pl … -am verify`.
-- QQQ code style and checkstyle of the target repo; license header copied from a neighboring file.
+- QQQ code style and checkstyle of the target repo. New files in `qqq-all` use the Apache-2.0 header; in other repos copy a neighboring file's header.
 - No secrets in the repo. Demo credentials live only in `compose.yaml` and the Keycloak realm file, are marked demo-only, and are overridable by env.
 - Releases, tags, and Maven Central or GHCR publishing of release versions: ask James first.
 
@@ -25,7 +25,7 @@
 
 **A1. Application launcher.** One entry point that starts everything configured.
 - `qqq-backend-core`: `QRuntimeServiceInterface { String getName(); void start(QInstance); void stop(); }`, `QInstance.withRuntimeService(QCodeReference)` / `getRuntimeServices()`.
-- `qqq-middleware-javalin`: `QApplicationLauncher.run(AbstractQQQApplication, QApplicationLauncherConfig)`. It creates `QApplicationJavalinServer` for the app and reuses the instance that server builds (never a second instance), then starts:
+- `qqq-middleware-javalin`: `QApplicationLauncher.run(AbstractQQQApplication, QApplicationLauncherConfig)`. It creates `QApplicationJavalinServer` for the app and reuses the instance that server builds (never a second instance; add a `getQInstance()` getter to the server if it lacks one), then starts:
   - `QApplicationJavalinServer`;
   - `QScheduleManager` when the instance has schedules or scheduled jobs;
   - each registered runtime service.
@@ -44,6 +44,7 @@ Each:
 2. Parent → `com.kingsrook:qbit-build-parent:2.0.0` (imports `qqq-bom-pom` 4.0.0). Remove child `qqq-bom-pom` imports that shadow the parent. Java 21. Leave LICENSE files and headers as they are.
 3. Build and test green on the parent's qqq 4.0.0. Also add an opt-in Maven profile `qqq-snapshot` that imports `qqq-bom-pom:${qqq.snapshot.version}` (default `4.1.0-SNAPSHOT`) ahead of the parent's BOM and adds the Central snapshots repository (`https://central.sonatype.com/repository/maven-snapshots/`); `-Pqqq-snapshot` must also build and test green. (The parent has no qqq-version property to override.) The move to a 4.1 parent happens at 4.1 GA (task C9).
 4. Integration tests that need Docker fail, not skip, when `CI=true`.
+5. Remove explicit qqq module `<version>`s in the child pom so the BOM (or the `qqq-snapshot` profile) controls them — `qbit-workflows` pins them explicitly on develop.
 
 **B1 extra (quick-search):**
 - Fix index drift: update and delete re-index or remove documents, and add a reconcile process that rebuilds the index from the source table.
@@ -88,7 +89,7 @@ Each:
 **C7. CI smoke and conformance.**
 - CI boots `core` via `java -jar` and `full` via `docker compose --profile full up -d --wait`.
 - Assertions: health 200; the Next UI is served; each backend's table queries; quick search finds a seeded customer; the ESB round trip works on both brokers; OIDC login works for the demo users.
-- CI also runs the ESB broker conformance suite against the compose brokers.
+- The ESB round trip runs against both compose brokers (the qqq-esb conformance suite itself starts its own containers and stays in qqq CI).
 
 **C8. Docs.**
 - README quick start (one command per profile) and a feature tour mapping each QQQ feature to where the demo shows it.
@@ -127,8 +128,9 @@ Most qbit repos have issues disabled, so their tasks are tracked in QRun-IO/qqq.
 | Q1 | A2, B1–B8, C1 | — |
 | Q2 | C2 | B1–B8 merged, C1 |
 | Q3 | A1 | ESB task 10 (qqq#748) merged |
-| Q4 | C3 | A1, A2, C2; ESB tasks 8 and 10 (qqq#746, #748) |
-| Q5 | C4, C5 | C3 |
-| Q6 | C6, C8 | C4, C5 |
-| Q7 | C7 | C6; ESB epic complete |
-| Q8 | C9 | qqq 4.1 GA (ESB + Next default); James's go-ahead |
+| Q4 | C3 | A1, A2, C2; ESB tasks 8, 10, 14 (qqq#746, #748, #751) |
+| Q5 | C4 | C3 |
+| Q6 | C5 | C4 |
+| Q7 | C6, C8 | C5 |
+| Q8 | C7 | C6; ESB epic complete |
+| Q9 | C9 | qqq 4.1 GA (ESB + Next default); James's go-ahead |
