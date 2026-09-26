@@ -1,0 +1,7 @@
+services:
+  app-full:
+    environment:
+      QQQ_ALL_OPENSEARCH_HOST: opensearch
+  opensearch:
+    ports:
+      - "127.0.0.1:9200:9200"
