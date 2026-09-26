@@ -42,7 +42,7 @@ The full stack initializes the MongoDB replica set, MinIO bucket, sample SQL tab
 
 Artemis requires a configured login on a fresh volume. If an older demo volume was created with anonymous login enabled, recreate that volume before relying on the new setting; `docker compose --profile full down --volumes` resets all local demo data.
 
-On merges to `develop`, [the image workflow](.github/workflows/publish-image.yml) checks that the `qqq-all` container package is already public, verifies the reactor, and pushes `ghcr.io/qrun-io/qqq-all:develop`. GitHub creates a new container package private by default, so the first image requires a deliberate, one-time bootstrap: an organization owner publishes an initial image, then changes the package visibility to **public** in GitHub package settings. Until that is done, the workflow fails before any image push. Do not enable automatic develop publication until the package is public.
+On merges to `develop`, [the image workflow](.github/workflows/publish-image.yml) verifies the reactor and publishes `ghcr.io/qrun-io/qqq-all:develop` only when the `qqq-all` container package is already public. If the package is absent, private, or cannot be read, image publication is skipped with a job summary while verification still runs. GitHub creates a new container package private by default, so the first image requires a deliberate, one-time bootstrap: an organization owner publishes an initial image, then changes the package visibility to **public** in GitHub package settings. Automatic develop publication starts only after that bootstrap.
 
 ## Contributing
 
