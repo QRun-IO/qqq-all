@@ -7,6 +7,7 @@
 package com.kingsrook.qqq.all;
 
 import java.nio.file.Path;
+import java.sql.SQLException;
 import java.util.List;
 import com.kingsrook.qbits.userrolepermissions.UserRolePermissionsQBitConfig;
 import com.kingsrook.qbits.userrolepermissions.UserRolePermissionsQBitProducer;
@@ -48,27 +49,63 @@ final class FullProfileApplication extends AbstractQQQApplication
 {
    private final Path                dataDirectory;
    private final FullProfileSettings settings;
+   private final boolean             provisionSchema;
 
    FullProfileApplication(Path dataDirectory, FullProfileSettings settings)
    {
+      this(dataDirectory, settings, false);
+   }
+
+   FullProfileApplication(Path dataDirectory, FullProfileSettings settings, boolean provisionSchema)
+   {
       this.dataDirectory = dataDirectory;
       this.settings = settings;
+      this.provisionSchema = provisionSchema;
    }
 
    @Override
    public QInstance defineQInstance() throws QException
    {
-      QInstance instance = new QqqAllApplication(dataDirectory, settings.get("ARTEMIS_URL")).defineQInstance();
+      QInstance instance = new QqqAllApplication(dataDirectory, settings.get("ARTEMIS_URL"), false).defineQInstance();
       addBackends(instance);
       addTables(instance);
       addAuthentication(instance);
       addEsb(instance);
+      DemoQBits.addCore(instance, "postgres");
+      DemoQBits.addFull(instance, settings);
+      // OIDC and ESB sessions use string user IDs, unlike the qbit's default integer user ID.
+      instance.getTable("processTrace").getField("userId").setType(QFieldType.STRING);
+      DemoUsers.protectWebhookResources(instance);
+      for(QTableMetaData table : instance.getTables().values())
+      {
+         if(!"postgres".equals(table.getBackendName()))
+         {
+            continue;
+         }
+         if(table.getBackendDetails() == null)
+         {
+            table.setBackendDetails(new RDBMSTableBackendDetails()
+               .withTableName(QInstanceEnricher.inferBackendName(table.getName())));
+         }
+         QInstanceEnricher.setInferredFieldBackendNames(table);
+      }
 
       EmailMessagingProviderMetaData mail = new EmailMessagingProviderMetaData()
          .withSmtpServer(settings.get("SMTP_HOST"))
          .withSmtpPort(settings.getOrDefault("SMTP_PORT", "1025"));
       mail.setName("mailpit");
       instance.addMessagingProvider(mail);
+      if(provisionSchema)
+      {
+         try
+         {
+            DemoQBitData.ensurePostgresSchema(instance);
+         }
+         catch(SQLException e)
+         {
+            throw new QException("Could not provision full-profile qbit tables", e);
+         }
+      }
       return instance;
    }
 
@@ -77,6 +114,10 @@ final class FullProfileApplication extends AbstractQQQApplication
       instance.addBackend(new RDBMSBackendMetaData().withName("postgres").withVendor("postgres")
          .withHostName(settings.get("POSTGRES_HOST")).withPort(settings.port("POSTGRES_PORT", "5432"))
          .withDatabaseName(settings.get("POSTGRES_DATABASE"))
+         .withJdbcUrl("jdbc:postgresql://" + settings.get("POSTGRES_HOST") + ":"
+            + settings.port("POSTGRES_PORT", "5432") + "/" + settings.get("POSTGRES_DATABASE"))
+         .withJdbcDriverClassName("org.postgresql.Driver")
+         .withActionStrategyCodeReference(new QCodeReference(PostgresActionStrategy.class))
          .withUsername(settings.get("POSTGRES_USER")).withPassword(settings.get("POSTGRES_PASSWORD")));
       instance.addBackend(new RDBMSBackendMetaData().withName("mysql").withVendor("mysql")
          .withHostName(settings.get("MYSQL_HOST")).withPort(settings.port("MYSQL_PORT", "3306"))
@@ -122,7 +163,7 @@ final class FullProfileApplication extends AbstractQQQApplication
             .withRecordFormat(RecordFormat.JSON).withCardinality(Cardinality.MANY).withGlob("*.json"))
          .withField(new QFieldMetaData("id", QFieldType.INTEGER))
          .withField(new QFieldMetaData("name", QFieldType.STRING)));
-      instance.addTable(new QTableMetaData().withName("importFile").withLabel("Import File")
+      instance.addTable(new QTableMetaData().withName("externalImportFile").withLabel("External Import File")
          .withBackendName("sftp").withPrimaryKeyField("id")
          .withBackendDetails(new SFTPTableBackendDetails().withBasePath("imports")
             .withRecordFormat(RecordFormat.JSON).withCardinality(Cardinality.MANY).withGlob("*.json"))
@@ -162,9 +203,19 @@ final class FullProfileApplication extends AbstractQQQApplication
    private void addEsb(QInstance instance)
    {
       EsbInstanceMetaData.of(instance)
+         .getProvider("artemis")
+         .withUsername(settings.get("ARTEMIS_USER"))
+         .withPassword(settings.get("ARTEMIS_PASSWORD"))
+         .withManagementUrl(settings.get("ARTEMIS_MANAGEMENT_URL"))
+         .withManagementUsername(settings.get("ARTEMIS_USER"))
+         .withManagementPassword(settings.get("ARTEMIS_PASSWORD"));
+      EsbInstanceMetaData.of(instance)
          .withProvider(new QEsbProviderMetaData().withName("rabbitmq")
             .withType(EsbProviderType.RABBITMQ).withUrl(settings.get("RABBITMQ_URL"))
-            .withUsername(settings.get("RABBITMQ_USER")).withPassword(settings.get("RABBITMQ_PASSWORD")))
+            .withUsername(settings.get("RABBITMQ_USER")).withPassword(settings.get("RABBITMQ_PASSWORD"))
+            .withManagementUrl(settings.get("RABBITMQ_MANAGEMENT_URL"))
+            .withManagementUsername(settings.get("RABBITMQ_USER"))
+            .withManagementPassword(settings.get("RABBITMQ_PASSWORD")))
          .withDestination(new QEsbDestinationMetaData().withName("orderSyncEvents")
             .withType(EsbDestinationType.QUEUE).withProviderName("rabbitmq")
             .withDestinationName("qqq.all.orderSyncEvents"));

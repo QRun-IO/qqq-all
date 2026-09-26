@@ -1,45 +1,37 @@
 # qqq-all
 
-An evolving reference app for QQQ 4.1. The `core` profile runs locally from one jar; `full` adds external backends and services. Compose and the remaining QBit demos are in separate, unmerged work.
-
-**Status:** under construction. qqq-all versions track QQQ and build on `4.1.0-SNAPSHOT` until QQQ 4.1 ships. See the [design](docs/design.md), the [plan](docs/plan.md), and the epic [#1](https://github.com/QRun-IO/qqq-all/issues/1).
+A runnable reference app for QQQ 4.1 with two profiles: `core` uses local storage and embedded Artemis; `full` adds external storage, RabbitMQ, OpenSearch quick search, Keycloak, Mailpit, and the included qbits. It is a local demo under construction while QQQ 4.1 finishes. See the [design](docs/design.md), [plan](docs/plan.md), and [epic #1](https://github.com/QRun-IO/qqq-all/issues/1).
 
 ## Quick start
 
-From the repository root, install Java 21 and Maven, then build the app and its BOM with `mvn -B verify`. This needs access to the QQQ 4.1 snapshot dependencies described in the [app guide](qqq-all-app/README.md).
+Install Java 21 and Maven, then build the app and its BOM from the repository root:
 
-**Core:** run `java -jar qqq-all-app/target/qqq-all-app-4.1.0-SNAPSHOT.jar`. Open `http://127.0.0.1:8080/`; `/health` is the health endpoint. The app stores local data under `./data` and merges sample customer and order rows on every start, which can reset edits to those rows. Set `QQQ_ALL_PORT` or `QQQ_ALL_DATA_DIR` to change those defaults. Core uses mock demo identities, so keep it on the loopback address.
+```bash
+mvn -B verify
+```
 
-**Full:** first provision PostgreSQL, MySQL, a MongoDB replica set, MinIO, SFTP, Artemis, RabbitMQ, Mailpit, Keycloak, and the required schemas and bucket. Set the `QQQ_ALL_*` variables listed in the [app guide](qqq-all-app/README.md). Then run `QQQ_ALL_PROFILE=full QQQ_ALL_BIND_HOST=127.0.0.1 java -jar qqq-all-app/target/qqq-all-app-4.1.0-SNAPSHOT.jar`. Full does not start those services itself; the Compose setup is still in C6. Keep `QQQ_ALL_BIND_HOST` on loopback for a local demo.
+Run core from the packaged jar, or use Compose for either profile:
 
-## Feature tour
+```bash
+java -jar qqq-all-app/target/qqq-all-app.jar
+# Or, after copying the local demo settings:
+cp .env.example .env
+docker compose --profile core up --build --wait
+# Use --profile full instead to start all external services.
+```
 
-| Feature | Where to find it |
-|---|---|
-| Next dashboard and health | The root page and `/health` in both profiles. |
-| Local storage | Seeded `customer` and `order` tables in H2, `orderLine` in SQLite, and `product` JSON files under `./data/files` in core. |
-| Event bus | An `order` insert or update publishes to the embedded Artemis `orderEvents` topic and triggers `syncOrder` in core. |
-| External storage | Full adds `warehouseCustomer` (PostgreSQL), `supplierOrder` (MySQL), `shipment` (MongoDB), `document` (MinIO S3), and `importFile` (SFTP). |
-| Messaging and email | Full uses external Artemis for `orderEvents`, publishes completed `syncOrder` events to RabbitMQ `orderSyncEvents`, and configures Mailpit SMTP. |
-| Authentication and permissions | Core has mock Admin and Demo User identities. Full uses Keycloak OIDC and maps realm roles through `qbit-user-role-permissions`; unknown roles get no permissions. |
+Open `http://127.0.0.1:8080/` for the dashboard and `/health` for status. The full profile starts PostgreSQL, MySQL, MongoDB, MinIO, SFTP, OpenSearch, Artemis, RabbitMQ, Mailpit, and Keycloak. Its demo logins are `demo-admin` and `demo-user`; their sample passwords are in [the demo realm](infra/keycloak/realm.json), while the OIDC client secret comes from your local `.env`. The browser issuer is `http://keycloak.localhost:8081`; make that name resolve to loopback if your host does not already. Compose publishes demo ports on host loopback. The [app guide](qqq-all-app/README.md) lists the environment contract and broker-management check.
 
-The tour reflects code already on `develop`. Quick search and the other QBit examples are being added in C5; the Compose/image quick start is being added in C6.
+## Explore the app
 
-## Local-demo limits
+Core seeds customers and orders in H2, order lines in SQLite, and product files under `./data`. Insert an order as Admin to publish an Artemis `orderEvents` message and trigger `syncOrder`; inspect its process trace and the demo webhook receipt. Core's mock Demo User can read but cannot edit webhook destinations or invoke delivery. Sample customer and order rows are merged on every start, so edits to those rows can be reset.
 
-This is a local demo and reference build, not a production deployment. Core uses mock authentication and a nonpersistent embedded broker. A production installation needs its own DNS, TLS termination, backups and restore testing, monitoring and alerting, and highly available brokers. Review authentication, credentials, data persistence, and network exposure before deploying beyond a local machine.
+Full adds sample tables on PostgreSQL, MySQL, MongoDB, MinIO S3, and SFTP. It includes OpenSearch customer quick search, table views, process tracing, workflows, geo addresses, SFTP import, and webhook administration with Keycloak role permissions. The `syncOrder` completion publication to RabbitMQ is configured in metadata and depends on QQQ ESB [Task 9](https://github.com/QRun-IO/qqq/pull/786) landing in QQQ 4.1; the app does not publish it through a separate workaround.
 
-## Modules
+To stop the full stack, run `docker compose --profile full down`. Add `--volumes` only when you intend to erase demo data. For a fresh Artemis volume, the configured login is required; old volumes created for anonymous access should be recreated. This reference stack uses demo credentials and is not a production deployment.
 
-| Module | Purpose |
-|---|---|
-| `qqq-all-bom` | One tested version set for QQQ, the ESB, the Next dashboard, the included qBits, JDBC drivers, and broker clients |
-| `qqq-all-app` | The core reference app and full-profile external-service wiring, plus seeded demo data |
+The [develop image workflow](.github/workflows/publish-image.yml) verifies the build and publishes to GHCR only after an organization owner bootstraps the container package and sets its visibility to public. Until then, image publication is skipped and local Compose remains available.
 
-## Contributing
+## Contributing and license
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), the [Code of Conduct](CODE_OF_CONDUCT.md), and the [security policy](SECURITY.md).
-
-## License
-
-Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+See [CONTRIBUTING.md](CONTRIBUTING.md), the [Code of Conduct](CODE_OF_CONDUCT.md), and the [security policy](SECURITY.md). Licensed under Apache-2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE).
