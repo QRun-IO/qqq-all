@@ -38,6 +38,43 @@
       <rabbitmq-jms.version>3.9.0</rabbitmq-jms.version>
    </properties>
 
+   <profiles>
+      <profile>
+         <id>release-central</id>
+         <build>
+            <plugins>
+               <plugin>
+                  <groupId>org.apache.maven.plugins</groupId>
+                  <artifactId>maven-enforcer-plugin</artifactId>
+                  <executions>
+                     <execution>
+                        <id>require-release-bom-pins</id>
+                        <phase>validate</phase>
+                        <goals><goal>enforce</goal></goals>
+                        <configuration>
+                           <rules>
+                              <requireProperty>
+                                 <property>qqq.version</property>
+                                 <regex>^4[.]1[.]0$</regex>
+                              </requireProperty>
+                              <requireProperty><property>qbit-quick-search.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
+                              <requireProperty><property>qbit-user-role-permissions.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
+                              <requireProperty><property>qbit-customizable-table-views.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
+                              <requireProperty><property>qbit-standard-process-trace.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
+                              <requireProperty><property>qbit-webhooks.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
+                              <requireProperty><property>qbit-workflows.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
+                              <requireProperty><property>qbit-geo-data.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
+                              <requireProperty><property>qbit-sftp-data-integration.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
+                           </rules>
+                        </configuration>
+                     </execution>
+                  </executions>
+               </plugin>
+            </plugins>
+         </build>
+      </profile>
+   </profiles>
+
    <dependencyManagement>
       <dependencies>
          <!-- QQQ modules, qqq-esb, and qqq-frontend-next. -->
