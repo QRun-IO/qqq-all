@@ -1,0 +1,30 @@
+QQQ All
+Copyright 2026 QRunIO, LLC
+
+This product includes software developed at QRunIO, LLC (https://qrun.io/).
+
+Licensed under the Apache License, Version 2.0.
+
+================================================================================
+
+This software contains contributions from:
+
+- James Maes
+
+================================================================================
+
+Third-Party Licenses:
+
+This software depends on and may redistribute third-party open source software
+components, including the QQQ framework, qBits, JDBC drivers, and message broker
+clients. Each component has its own license. Please see the individual component
+documentation for license details.
+
+================================================================================
+
+Trademarks:
+
+QQQ, qBits, qRun, qStudio, and the QRunIO logo are trademarks of QRunIO, LLC.
+Use of these trademarks must comply with QRunIO's Trademark Guidelines.
+
+================================================================================
