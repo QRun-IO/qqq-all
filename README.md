@@ -10,21 +10,30 @@ Install Java 21 and Maven, then build the app and its BOM from the repository ro
 mvn -B verify
 ```
 
-Run core from the packaged jar, or use Compose for either profile:
+Run core from the packaged jar:
 
 ```bash
 java -jar qqq-all-app/target/qqq-all-app.jar
-# Or, after copying the local demo settings:
-cp .env.example .env
-docker compose --profile core up --build --wait
-# Use --profile full instead to start all external services.
 ```
 
-Open `http://127.0.0.1:8080/` for the dashboard and `/health` for status. The full profile starts PostgreSQL, MySQL, MongoDB, MinIO, SFTP, OpenSearch, Artemis, RabbitMQ, Mailpit, and Keycloak. Its demo logins are `demo-admin` and `demo-user`; their sample passwords are in [the demo realm](infra/keycloak/realm.json), while the OIDC client secret comes from your local `.env`. The browser issuer is `http://keycloak.localhost:8081`; make that name resolve to loopback if your host does not already. Compose publishes demo ports on host loopback. The [app guide](qqq-all-app/README.md) lists the environment contract and broker-management check.
+Or copy the local demo settings and run core with Compose:
+
+```bash
+cp .env.example .env
+docker compose --profile core up --build --wait
+```
+
+To run full instead, stop core first, then use the same `.env` (or copy `.env.example` if starting with full):
+
+```bash
+docker compose --profile full up --build --wait
+```
+
+Open `http://127.0.0.1:8080/` for the dashboard and `/health` for status. The full profile starts PostgreSQL, MySQL, MongoDB, MinIO, SFTP, OpenSearch, Artemis, RabbitMQ, Mailpit, and Keycloak. Its demo logins are `demo-admin` and `demo-user`; their sample passwords and the OIDC client secret come from your local `.env` (copied from [.env.example](.env.example)). The browser issuer is `http://keycloak.localhost:8081`; make that name resolve to loopback if your host does not already. Compose publishes demo ports on host loopback. The [app guide](qqq-all-app/README.md) lists the environment contract and broker-management check.
 
 ## Explore the app
 
-Core seeds customers and orders in H2, order lines in SQLite, and product files under `./data`. Insert an order as Admin to publish an Artemis `orderEvents` message and trigger `syncOrder`; inspect its process trace and the demo webhook receipt. Core's mock Demo User can read but cannot edit webhook destinations or invoke delivery. Sample customer and order rows are merged on every start, so edits to those rows can be reset.
+Core seeds customers and orders in H2, order lines in SQLite, and product files under `./data`. Insert an order as Admin to publish an Artemis `orderEvents` message and trigger `syncOrder`; inspect its process trace. Run `SendWebhookEvent` as Admin, then inspect the demo webhook receipt. Core's mock Demo User can read but cannot edit webhook destinations or invoke delivery. Sample customer and order rows are merged on every start, so edits to those rows can be reset.
 
 Full adds sample tables on PostgreSQL, MySQL, MongoDB, MinIO S3, and SFTP. It includes OpenSearch customer quick search, table views, process tracing, workflows, geo addresses, SFTP import, and webhook administration with Keycloak role permissions. The `syncOrder` completion publication to RabbitMQ is configured in metadata and depends on QQQ ESB [Task 9](https://github.com/QRun-IO/qqq/pull/786) landing in QQQ 4.1; the app does not publish it through a separate workaround.
 
