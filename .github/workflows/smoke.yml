@@ -27,7 +27,7 @@ jobs:
       - name: Verify and package core app
         run: mvn -B -ntp -pl qqq-all-app -am verify
       - name: Smoke packaged core over HTTP
-        run: python3 scripts/run_core_smoke.py qqq-all-app/target/qqq-all-app-4.1.0-SNAPSHOT.jar
+        run: python3 scripts/run_core_smoke.py qqq-all-app/target/qqq-all-app.jar
 
   full:
     runs-on: ubuntu-latest

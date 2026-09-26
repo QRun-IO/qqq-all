@@ -4,6 +4,7 @@
 import http.cookiejar
 import json
 import os
+import re
 import shutil
 import socketserver
 import subprocess
@@ -13,6 +14,7 @@ import threading
 import unittest
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
@@ -112,6 +114,15 @@ class SmokeTest(unittest.TestCase):
             )
             self.assertEqual(1, result.returncode)
             self.assertIn("packaged app exited", result.stderr)
+
+    def test_ci_core_smokes_maven_final_artifact(self):
+        pom = ET.parse(ROOT / "qqq-all-app" / "pom.xml")
+        final_name = pom.findtext(".//{http://maven.apache.org/POM/4.0.0}build/"
+                                  "{http://maven.apache.org/POM/4.0.0}finalName")
+        workflow = (ROOT / ".github" / "workflows" / "smoke.yml").read_text()
+        command = re.search(r"run: python3 scripts/run_core_smoke.py (\S+)", workflow)
+        self.assertIsNotNone(command)
+        self.assertEqual(f"qqq-all-app/target/{final_name}.jar", command.group(1))
 
     def test_standalone_full_smoke_requires_explicit_search_endpoint(self):
         result = subprocess.run(
