@@ -18,6 +18,8 @@ import com.kingsrook.qqq.backend.core.instances.QInstanceValidator;
 import com.kingsrook.qqq.backend.core.model.actions.processes.RunProcessInput;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QueryInput;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
+import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
+import com.kingsrook.qqq.backend.module.rdbms.model.metadata.RDBMSTableBackendDetails;
 import com.kingsrook.qqq.backend.core.model.metadata.permissions.PermissionLevel;
 import com.kingsrook.qqq.backend.core.model.session.QSession;
 import org.junit.jupiter.api.Test;
@@ -50,6 +52,18 @@ class FullQBitsTest
       assertNotNull(instance.getProcess("SFTPImportFileSyncProcess"));
       assertNotNull(instance.getTable("SFTPImportSourceFileTable"));
       assertEquals("sftp", instance.getTable("SFTPImportSourceFileTable").getBackendName());
+      assertEquals("scheduled_job", ((RDBMSTableBackendDetails) instance.getTable("scheduledJob")
+         .getBackendDetails()).getTableName());
+      assertEquals("create_date", instance.getTable("scheduledJob").getField("createDate").getBackendName());
+      assertEquals(QFieldType.STRING, instance.getTable("processTrace").getField("userId").getType());
+      assertTrue(DemoQBitData.postgresSchemaStatements(instance).stream()
+         .anyMatch(sql -> sql.startsWith("CREATE TABLE IF NOT EXISTS \"scheduled_job\"")
+            && sql.contains("\"create_date\" TIMESTAMP")));
+      assertTrue(DemoQBitData.postgresSchemaStatements(instance).stream()
+         .anyMatch(sql -> sql.startsWith("CREATE TABLE IF NOT EXISTS \"webhook_subscription\"")
+            && sql.contains("\"webhook_event_type_name\" VARCHAR(4000)")));
+      assertFalse(DemoQBitData.postgresSchemaStatements(instance).stream()
+         .anyMatch(sql -> sql.contains("\"user_session\"") || sql.contains("\"warehouse_customer\"")));
       for(String tableName : Set.of("webhook", "webhookSubscription", "webhookEvent",
          "webhookEventContent", "webhookEventSendLog", "scheduledJob", "scheduledJobParameter"))
       {

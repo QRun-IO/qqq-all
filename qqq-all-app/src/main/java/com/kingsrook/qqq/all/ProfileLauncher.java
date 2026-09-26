@@ -46,7 +46,7 @@ public final class ProfileLauncher
 
       FullProfileSettings settings = FullProfileSettings.from(environment);
       CoreData.seed(dataDirectory);
-      QApplicationLauncher.run(new FullProfileApplication(dataDirectory, settings),
+      QApplicationLauncher.run(new FullProfileApplication(dataDirectory, settings, true),
          new QApplicationLauncherConfig().withRegisterShutdownHook(true)
             .withServerCustomizer(server -> server.withPort(port)
                .withJavalinConfigCustomizer(config -> config.jetty.host = settings.get("BIND_HOST"))));

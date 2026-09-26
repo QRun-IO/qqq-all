@@ -15,6 +15,7 @@ import com.kingsrook.qqq.backend.core.model.metadata.authentication.OAuth2Authen
 import com.kingsrook.qqq.backend.core.model.metadata.QAuthenticationType;
 import com.kingsrook.qqq.backend.core.model.metadata.messaging.email.EmailMessagingProviderMetaData;
 import com.kingsrook.qqq.backend.module.mongodb.model.metadata.MongoDBBackendMetaData;
+import com.kingsrook.qqq.backend.module.rdbms.jdbc.ConnectionManager;
 import com.kingsrook.qqq.backend.module.rdbms.model.metadata.RDBMSBackendMetaData;
 import com.kingsrook.qqq.esb.model.EsbInstanceMetaData;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,12 @@ class FullProfileTest
       QInstance instance = new FullProfileApplication(dataDirectory, settings).defineQInstance();
       new QInstanceValidator().validate(instance);
 
-      assertEquals("postgres.example.test", ((RDBMSBackendMetaData) instance.getBackend("postgres")).getHostName());
+      RDBMSBackendMetaData postgres = (RDBMSBackendMetaData) instance.getBackend("postgres");
+      assertEquals("postgres.example.test", postgres.getHostName());
+      assertEquals("jdbc:postgresql://postgres.example.test:5432/qqq", ConnectionManager.getJdbcUrl(postgres));
+      assertEquals("org.postgresql.Driver", ConnectionManager.getJdbcDriverClassName(postgres));
+      assertEquals("\"", postgres.getActionStrategy().getIdentifierQuoteString());
+      assertEquals("DEFAULT VALUES", postgres.getActionStrategy().getInsertDefaultValuesClause());
       assertEquals("mysql.example.test", ((RDBMSBackendMetaData) instance.getBackend("mysql")).getHostName());
       assertEquals("replicaSet=rs0", ((MongoDBBackendMetaData) instance.getBackend("mongo")).getUrlSuffix());
       assertEquals("postgres", instance.getTable("warehouseCustomer").getBackendName());
