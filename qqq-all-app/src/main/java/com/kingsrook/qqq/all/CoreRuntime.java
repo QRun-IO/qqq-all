@@ -36,6 +36,7 @@ final class CoreRuntime implements AutoCloseable
       Integer brokerPort = findFreePort();
       Path brokerDirectory = dataDirectory.resolve("artemis").toAbsolutePath();
       String brokerUrl = "tcp://127.0.0.1:" + brokerPort;
+      DemoQBitData.ensureSchema(dataDirectory, new QqqAllApplication(dataDirectory, brokerUrl).defineQInstance());
       Configuration configuration = new ConfigurationImpl()
          .setPersistenceEnabled(false).setSecurityEnabled(false).setJMXManagementEnabled(false)
          .setBindingsDirectory(brokerDirectory.resolve("bindings").toString())

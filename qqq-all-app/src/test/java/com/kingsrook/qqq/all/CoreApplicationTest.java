@@ -17,6 +17,9 @@ import java.util.List;
 import java.util.Map;
 import com.kingsrook.qqq.backend.core.actions.tables.InsertAction;
 import com.kingsrook.qqq.backend.core.actions.tables.QueryAction;
+import com.kingsrook.qqq.backend.core.actions.processes.RunProcessAction;
+import com.kingsrook.qqq.backend.core.model.actions.processes.RunProcessInput;
+import com.kingsrook.qqq.backend.core.actions.processes.QProcessCallbackFactory;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.model.actions.tables.insert.InsertInput;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QueryInput;
@@ -71,10 +74,14 @@ class CoreApplicationTest
             assertEquals("core:demo", mockAuth.createSession(runtime.getLauncher().getQInstance(),
                Map.of("sessionId", DemoUsers.DEMO_SESSION)).getUser().getIdReference());
 
-            for(String table : List.of("customer", "order", "orderLine", "product"))
+            for(String table : List.of("customer", "order", "orderLine", "product", "address", "shipping_city"))
             {
                assertFalse(new QueryAction().execute(new QueryInput(table)).getRecords().isEmpty(), table);
             }
+            assertEquals("Customer Directory", new QueryAction().execute(new QueryInput("TableView"))
+               .getRecords().getFirst().getValueString("name"));
+            assertEquals("Order Status Review", new QueryAction().execute(new QueryInput("workflow"))
+               .getRecords().getFirst().getValueString("name"));
 
             waitFor(() -> QEsbRuntime.getInstance().getRunner("syncOrder.orderEvents") != null
                && QEsbRuntime.getInstance().getRunner("syncOrder.orderEvents").getState() == EsbTriggerState.RUNNING);
@@ -82,6 +89,16 @@ class CoreApplicationTest
                new QRecord().withValue("orderNo", "ORD-1002")
                   .withValue("customerId", 2).withValue("status", "NEW"))));
             waitFor(() -> QqqAllApplication.SyncOrderStep.getRunCount() > 0);
+            waitFor(() -> !new QueryAction().execute(new QueryInput("processTrace")).getRecords().isEmpty());
+
+            RunProcessInput workflow = new RunProcessInput();
+            workflow.setProcessName("RunRecordWorkflow");
+            workflow.setCallback(QProcessCallbackFactory.forPrimaryKey("id", 1));
+            workflow.addValue("tableName", "order");
+            workflow.addValue("workflowId", 1);
+            workflow.setFrontendStepBehavior(RunProcessInput.FrontendStepBehavior.SKIP);
+            new RunProcessAction().execute(workflow);
+            assertFalse(new QueryAction().execute(new QueryInput("workflowRunLog")).getRecords().isEmpty());
          }
          finally
          {
@@ -90,13 +107,13 @@ class CoreApplicationTest
       }
    }
 
-   private static void waitFor(java.util.function.BooleanSupplier condition) throws Exception
+   private static void waitFor(java.util.concurrent.Callable<Boolean> condition) throws Exception
    {
       long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
-      while(!condition.getAsBoolean() && System.nanoTime() < deadline)
+      while(!condition.call() && System.nanoTime() < deadline)
       {
          Thread.sleep(50);
       }
-      assertTrue(condition.getAsBoolean());
+      assertTrue(condition.call());
    }
 }
