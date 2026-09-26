@@ -21,6 +21,10 @@ public class DemoUsers implements QAuthenticationModuleCustomizerInterface
    public static final String ADMIN_SESSION = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
    public static final String DEMO_SESSION  = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
    private static final List<String> DEMO_TABLES = List.of("customer", "order", "orderLine", "product", "address");
+   private static final List<String> WEBHOOK_TABLES = List.of("webhook", "webhookSubscription",
+      "webhookEvent", "webhookEventContent", "webhookEventSendLog", "scheduledJob", "scheduledJobParameter");
+   private static final List<String> WEBHOOK_PROCESSES = List.of("SendWebhookEvent",
+      "SendTestEventToWebhook", "ManageWebhookHealth");
 
    static void protectDemoTables(QInstance instance)
    {
@@ -28,6 +32,16 @@ public class DemoUsers implements QAuthenticationModuleCustomizerInterface
       {
          instance.getTable(tableName).setPermissionRules(new QPermissionRules()
             .withLevel(PermissionLevel.READ_INSERT_EDIT_DELETE_PERMISSIONS));
+      }
+      for(String tableName : WEBHOOK_TABLES)
+      {
+         instance.getTable(tableName).setPermissionRules(new QPermissionRules()
+            .withLevel(PermissionLevel.READ_INSERT_EDIT_DELETE_PERMISSIONS));
+      }
+      for(String processName : WEBHOOK_PROCESSES)
+      {
+         instance.getProcess(processName).setPermissionRules(new QPermissionRules()
+            .withLevel(PermissionLevel.HAS_ACCESS_PERMISSION));
       }
    }
 
@@ -45,6 +59,21 @@ public class DemoUsers implements QAuthenticationModuleCustomizerInterface
          if(admin)
          {
             session.withPermissions(tableName + ".insert", tableName + ".edit", tableName + ".delete");
+         }
+      }
+      for(String tableName : WEBHOOK_TABLES)
+      {
+         session.withPermission(tableName + ".read");
+         if(admin)
+         {
+            session.withPermissions(tableName + ".insert", tableName + ".edit", tableName + ".delete");
+         }
+      }
+      if(admin)
+      {
+         for(String processName : WEBHOOK_PROCESSES)
+         {
+            session.withPermission(processName + ".hasAccess");
          }
       }
       session.withValueForFrontend("user", new LinkedHashMap<>(Map.of("name", name, "email", userId + "@example.test")));

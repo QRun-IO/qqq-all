@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import com.kingsrook.qbits.webhooks.model.WebhookEventStatus;
 import com.kingsrook.qqq.backend.core.actions.tables.InsertAction;
 import com.kingsrook.qqq.backend.core.actions.tables.QueryAction;
 import com.kingsrook.qqq.backend.core.actions.processes.RunProcessAction;
@@ -74,8 +75,18 @@ class CoreApplicationTest
          assertEquals(200, demoRead.statusCode(), demoRead.body());
          HttpResponse<String> demoInsert = insertOrder(client, port, DemoUsers.DEMO_SESSION, "ORD-DENIED");
          assertEquals(403, demoInsert.statusCode());
+         assertEquals(403, updateWebhook(client, port, DemoUsers.DEMO_SESSION,
+            "webhook", "{\"url\":\"http://127.0.0.1:1/\"}").statusCode());
+         assertEquals(403, updateWebhook(client, port, DemoUsers.DEMO_SESSION,
+            "webhookSubscription", "{\"activeStatusId\":3}").statusCode());
+         assertEquals(403, runWebhookProcess(client, port, DemoUsers.DEMO_SESSION).statusCode());
+         assertEquals(200, updateWebhook(client, port, DemoUsers.ADMIN_SESSION,
+            "webhook", "{\"url\":\"http://127.0.0.1:" + port + "/demo/order-webhook\"}").statusCode());
+         assertEquals(200, updateWebhook(client, port, DemoUsers.ADMIN_SESSION,
+            "webhookSubscription", "{\"activeStatusId\":1}").statusCode());
          HttpResponse<String> adminInsert = insertOrder(client, port, DemoUsers.ADMIN_SESSION, "ORD-ADMIN");
          assertEquals(200, adminInsert.statusCode(), adminInsert.body());
+         assertEquals(200, runWebhookProcess(client, port, DemoUsers.ADMIN_SESSION).statusCode());
 
          QContext.init(runtime.getLauncher().getQInstance(), new QSystemUserSession());
          try
@@ -104,16 +115,15 @@ class CoreApplicationTest
             waitFor(() -> !new QueryAction().execute(new QueryInput("processTrace")).getRecords().isEmpty());
             waitFor(() -> !new QueryAction().execute(new QueryInput("webhookEvent")).getRecords().isEmpty());
 
-            RunProcessInput sendWebhook = new RunProcessInput();
-            sendWebhook.setProcessName("SendWebhookEvent");
-            sendWebhook.addValue("webhookId", 1);
-            sendWebhook.setFrontendStepBehavior(RunProcessInput.FrontendStepBehavior.SKIP);
-            new RunProcessAction().execute(sendWebhook);
             HttpResponse<String> receipts = client.send(HttpRequest.newBuilder()
                .uri(URI.create("http://127.0.0.1:" + port + "/demo/order-webhook-receipts"))
                .build(), HttpResponse.BodyHandlers.ofString());
             assertEquals(200, receipts.statusCode(), receipts.body());
-            assertTrue(receipts.body().contains("ORD-ADMIN"), receipts.body());
+            waitFor(() -> client.send(HttpRequest.newBuilder()
+               .uri(URI.create("http://127.0.0.1:" + port + "/demo/order-webhook-receipts"))
+               .build(), HttpResponse.BodyHandlers.ofString()).body().contains("ORD-ADMIN"));
+            waitFor(() -> new QueryAction().execute(new QueryInput("webhookEvent")).getRecords().stream()
+               .anyMatch(event -> WebhookEventStatus.DELIVERED.getId().equals(event.getValueInteger("eventStatusId"))));
 
             RunProcessInput workflow = new RunProcessInput();
             workflow.setProcessName("RunRecordWorkflow");
@@ -129,6 +139,28 @@ class CoreApplicationTest
             QContext.clear();
          }
       }
+   }
+
+   private static HttpResponse<String> updateWebhook(HttpClient client, Integer port, String sessionId,
+      String tableName, String body) throws Exception
+   {
+      return client.send(HttpRequest.newBuilder()
+         .uri(URI.create("http://127.0.0.1:" + port + "/data/" + tableName + "/1"))
+         .header("Cookie", "sessionId=" + sessionId)
+         .header("Content-Type", "application/json")
+         .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
+         .build(), HttpResponse.BodyHandlers.ofString());
+   }
+
+   private static HttpResponse<String> runWebhookProcess(HttpClient client, Integer port, String sessionId)
+      throws Exception
+   {
+      return client.send(HttpRequest.newBuilder()
+         .uri(URI.create("http://127.0.0.1:" + port + "/processes/SendWebhookEvent/run?webhookId=1"))
+         .header("Cookie", "sessionId=" + sessionId)
+         .header("Content-Type", "application/json")
+         .POST(HttpRequest.BodyPublishers.ofString("{}"))
+         .build(), HttpResponse.BodyHandlers.ofString());
    }
 
    private static HttpResponse<String> insertOrder(HttpClient client, Integer port, String sessionId, String orderNo)

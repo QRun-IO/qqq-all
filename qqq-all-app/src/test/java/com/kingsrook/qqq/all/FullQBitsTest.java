@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import com.kingsrook.qbits.quicksearch.QuickSearchQBitConfig;
 import com.kingsrook.qqq.backend.core.instances.QInstanceValidator;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
+import com.kingsrook.qqq.backend.core.model.metadata.permissions.PermissionLevel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -40,6 +41,8 @@ class FullQBitsTest
       assertNotNull(instance.getProcess("SFTPImportFileSyncProcess"));
       assertNotNull(instance.getTable("SFTPImportSourceFileTable"));
       assertEquals("sftp", instance.getTable("SFTPImportSourceFileTable").getBackendName());
+      assertEquals(PermissionLevel.NOT_PROTECTED, instance.getTable("webhook").getPermissionRules().getLevel());
+      assertEquals(PermissionLevel.NOT_PROTECTED, instance.getProcess("SendWebhookEvent").getPermissionRules().getLevel());
       QuickSearchQBitConfig search = (QuickSearchQBitConfig) instance.getQBits().values().stream()
          .filter(qbit -> "quick-search".equals(qbit.getArtifactId())).findFirst().orElseThrow().getConfig();
       assertEquals("customer", search.getSearchableTables().getFirst().getTableName());

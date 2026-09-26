@@ -47,7 +47,7 @@ public class DemoOrderWebhookReceiver implements QJavalinRouteProviderInterface
             {
                RECEIPTS.removeFirst();
             }
-            context.status(204);
+            context.status(200).result("ok");
          });
          get("/demo/order-webhook-receipts", context -> context.json(List.copyOf(RECEIPTS)));
       });
