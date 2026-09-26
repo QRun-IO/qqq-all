@@ -113,6 +113,15 @@ class SmokeTest(unittest.TestCase):
             self.assertEqual(1, result.returncode)
             self.assertIn("packaged app exited", result.stderr)
 
+    def test_standalone_full_smoke_requires_explicit_search_endpoint(self):
+        result = subprocess.run(
+            [sys.executable, str(Path(__file__).with_name("smoke.py")), "full",
+             "--base-url", "http://127.0.0.1:1"],
+            capture_output=True, text=True, timeout=5,
+        )
+        self.assertEqual(1, result.returncode)
+        self.assertIn("run_full_smoke.py", result.stderr)
+
     def test_full_runner_reserves_distinct_non_ephemeral_app_ports(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

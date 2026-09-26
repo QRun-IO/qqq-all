@@ -326,13 +326,15 @@ def main():
     parser.add_argument("--base-url", default="http://127.0.0.1:8080")
     parser.add_argument("--timeout", type=int, default=90)
     parser.add_argument("--keycloak-url", default="http://keycloak.localhost:8081/realms/qqq-all")
-    parser.add_argument("--opensearch-url", default="http://127.0.0.1:9200")
+    parser.add_argument("--opensearch-url")
     parser.add_argument("--rabbitmq-url", default="http://127.0.0.1:15672")
     args = parser.parse_args()
     client = SmokeClient(args.base_url, CORE_ADMIN_SESSION if args.profile == "core" else None)
     if args.profile == "core":
         check_core(client, args.timeout)
     else:
+        if not args.opensearch_url:
+            raise AssertionError("full profile needs --opensearch-url; use run_full_smoke.py for private Compose")
         check_full(args.base_url, args.keycloak_url,
                    lambda index, query: http_query_index(args.opensearch_url, index, query),
                    args.rabbitmq_url, args.timeout)
