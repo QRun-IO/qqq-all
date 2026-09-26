@@ -76,6 +76,7 @@ public class DemoUsers implements QAuthenticationModuleCustomizerInterface
       }
       if(admin)
       {
+         session.withPermissions("esbView.hasAccess", "esbOperate.hasAccess", "esbDelete.hasAccess");
          for(String processName : WEBHOOK_PROCESSES)
          {
             session.withPermission(processName + ".hasAccess");

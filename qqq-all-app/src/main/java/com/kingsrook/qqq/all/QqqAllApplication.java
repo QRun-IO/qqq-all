@@ -14,6 +14,7 @@ import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.instances.AbstractQQQApplication;
 import com.kingsrook.qqq.backend.core.model.actions.processes.RunBackendStepInput;
 import com.kingsrook.qqq.backend.core.model.actions.processes.RunBackendStepOutput;
+import com.kingsrook.qqq.backend.core.model.metadata.MetaDataProducerHelper;
 import com.kingsrook.qqq.backend.core.model.metadata.QAuthenticationType;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 import com.kingsrook.qqq.backend.core.model.metadata.authentication.AuthScope;
@@ -33,6 +34,8 @@ import com.kingsrook.qqq.backend.module.rdbms.model.metadata.RDBMSBackendMetaDat
 import com.kingsrook.qqq.backend.module.rdbms.model.metadata.RDBMSTableBackendDetails;
 import com.kingsrook.qqq.backend.module.sqlite.model.metadata.SQLiteBackendMetaData;
 import com.kingsrook.qqq.esb.envelope.EsbEvent;
+import com.kingsrook.qqq.esb.api.EsbJavalinMetaDataProducer;
+import com.kingsrook.qqq.esb.metadata.EsbAppMetaDataProducer;
 import com.kingsrook.qqq.esb.model.EsbDestinationType;
 import com.kingsrook.qqq.esb.model.EsbInstanceMetaData;
 import com.kingsrook.qqq.esb.model.EsbProcessMetaData;
@@ -135,6 +138,8 @@ public final class QqqAllApplication extends AbstractQQQApplication
             .withType(EsbDestinationType.TOPIC).withProviderName("artemis")
             .withDestinationName("qqq.all.orderEvents"));
       instance.withRuntimeService(new QCodeReference(CoreEsbRuntimeService.class));
+      MetaDataProducerHelper.processAllMetaDataProducersInPackage(instance, EsbAppMetaDataProducer.class.getPackageName());
+      new EsbJavalinMetaDataProducer().produce(instance);
 
       instance.withSupplementalMetaData(new HealthCheckMetaData().withEnabled(true)
          .withEndpointPath("/health").withIndicators(List.of(new MemoryHealthIndicator().withThreshold(99))));
