@@ -13,12 +13,14 @@ import java.util.stream.Collectors;
 import com.kingsrook.qbits.userrolepermissions.model.Role;
 import com.kingsrook.qbits.userrolepermissions.utils.PermissionManager;
 import com.kingsrook.qqq.backend.core.actions.tables.QueryAction;
+import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QCriteriaOperator;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QQueryFilter;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QueryInput;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 import com.kingsrook.qqq.backend.core.model.session.QSession;
+import com.kingsrook.qqq.backend.core.model.session.QSystemUserSession;
 import com.kingsrook.qqq.backend.core.modules.authentication.QAuthenticationModuleCustomizerInterface;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -73,9 +75,18 @@ public class FullOidcSessionCustomizer implements QAuthenticationModuleCustomize
       {
          return Set.of();
       }
-      Set<Integer> roleIds = new QueryAction().execute(new QueryInput(Role.TABLE_NAME)
-            .withFilter(new QQueryFilter().withCriteria("name", QCriteriaOperator.IN, roles)))
-         .getRecords().stream().map(record -> record.getValueInteger("id")).collect(Collectors.toSet());
-      return PermissionManager.getInstance().getEffectivePermissionsForRoles(roleIds);
+      QSession previousSession = QContext.getQSession();
+      try
+      {
+         QContext.setQSession(new QSystemUserSession());
+         Set<Integer> roleIds = new QueryAction().execute(new QueryInput(Role.TABLE_NAME)
+               .withFilter(new QQueryFilter().withCriteria("name", QCriteriaOperator.IN, roles)))
+            .getRecords().stream().map(record -> record.getValueInteger("id")).collect(Collectors.toSet());
+         return PermissionManager.getInstance().getEffectivePermissionsForRoles(roleIds);
+      }
+      finally
+      {
+         QContext.setQSession(previousSession);
+      }
    }
 }
