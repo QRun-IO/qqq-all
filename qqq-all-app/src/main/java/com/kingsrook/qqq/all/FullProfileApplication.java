@@ -65,6 +65,7 @@ final class FullProfileApplication extends AbstractQQQApplication
       addEsb(instance);
       DemoQBits.addCore(instance, "postgres");
       DemoQBits.addFull(instance, settings);
+      DemoUsers.protectWebhookResources(instance);
 
       EmailMessagingProviderMetaData mail = new EmailMessagingProviderMetaData()
          .withSmtpServer(settings.get("SMTP_HOST"))

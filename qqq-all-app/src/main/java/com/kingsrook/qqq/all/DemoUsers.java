@@ -33,6 +33,11 @@ public class DemoUsers implements QAuthenticationModuleCustomizerInterface
          instance.getTable(tableName).setPermissionRules(new QPermissionRules()
             .withLevel(PermissionLevel.READ_INSERT_EDIT_DELETE_PERMISSIONS));
       }
+      protectWebhookResources(instance);
+   }
+
+   static void protectWebhookResources(QInstance instance)
+   {
       for(String tableName : WEBHOOK_TABLES)
       {
          instance.getTable(tableName).setPermissionRules(new QPermissionRules()
