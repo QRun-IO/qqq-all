@@ -1,53 +1,46 @@
 # qqq-all
 
-QQQ with every feature configured and working out of the box: every storage backend, quick search, the ESB (ActiveMQ Artemis and RabbitMQ), OIDC, and the Next dashboard. It runs in two profiles: `core` (no containers, `java -jar`) and `full` (`docker compose --profile full up`).
+A runnable reference app for QQQ 4.1 with two profiles: `core` uses local storage and embedded Artemis; `full` adds external storage, RabbitMQ, OpenSearch quick search, Keycloak, Mailpit, and the included qbits. It is a local demo under construction while QQQ 4.1 finishes. See the [design](docs/design.md), [plan](docs/plan.md), and [epic #1](https://github.com/QRun-IO/qqq-all/issues/1).
 
-**Status:** under construction. qqq-all versions track QQQ and build on `4.1.0-SNAPSHOT` until QQQ 4.1 ships. See the [design](docs/design.md), the [plan](docs/plan.md), and the epic [#1](https://github.com/QRun-IO/qqq-all/issues/1). It is a local demo and reference build, not a production deployment.
+## Quick start
 
-## Modules
-
-| Module | Purpose |
-|---|---|
-| `qqq-all-bom` | One tested version set for QQQ, the ESB, the Next dashboard, the included qBits, JDBC drivers, and broker clients |
-| `qqq-all-app` | The reference application with every backend, qBit, and the ESB wired, plus seeded demo data |
-
-## Build
-
-Requires Java 21 and Maven.
+Install Java 21 and Maven, then build the app and its BOM from the repository root:
 
 ```bash
 mvn -B verify
 ```
 
-## Run locally
-
-The core profile needs only Java 21:
+Run core from the packaged jar:
 
 ```bash
 java -jar qqq-all-app/target/qqq-all-app.jar
 ```
 
-For containers, copy the demo settings and build the jar before starting either Compose profile:
+Or copy the local demo settings and run core with Compose:
 
 ```bash
 cp .env.example .env
-mvn -B verify
 docker compose --profile core up --build --wait
-# Or: docker compose --profile full up --build --wait
 ```
 
-The app is at `http://127.0.0.1:8080/health` (change `QQQ_ALL_PORT` in `.env` if needed). The full profile also publishes local-only management ports for Keycloak (`8081`), Mailpit (`8025`), MinIO (`9001`), Artemis/Jolokia (`8161`), and RabbitMQ (`15672`). The demo Keycloak users are `demo-admin` and `demo-user`; their passwords and the confidential client secret come from `.env`. The sample values in `.env.example` are for local demonstrations only. The default browser-visible issuer is `http://keycloak.localhost:8081`; if your host does not resolve `keycloak.localhost` to loopback, add that local hosts entry before trying OIDC login.
+To run full instead, stop core first, then use the same `.env` (or copy `.env.example` if starting with full):
 
-The full stack initializes the MongoDB replica set, MinIO bucket, sample SQL tables, OAuth2 session tables, and demo roles/permissions. PostgreSQL and MySQL initialization scripts run only when their data volumes are first created. To stop, run `docker compose --profile full down`; adding `--volumes` removes demo data. See [the app guide](qqq-all-app/README.md) for the full-profile environment contract.
+```bash
+docker compose --profile full up --build --wait
+```
 
-Artemis requires a configured login on a fresh volume. If an older demo volume was created with anonymous login enabled, recreate that volume before relying on the new setting; `docker compose --profile full down --volumes` resets all local demo data.
+Open `http://127.0.0.1:8080/` for the dashboard and `/health` for status. The full profile starts PostgreSQL, MySQL, MongoDB, MinIO, SFTP, OpenSearch, Artemis, RabbitMQ, Mailpit, and Keycloak. Its demo logins are `demo-admin` and `demo-user`; their sample passwords and the OIDC client secret come from your local `.env` (copied from [.env.example](.env.example)). The browser issuer is `http://keycloak.localhost:8081`; make that name resolve to loopback if your host does not already. Compose publishes demo ports on host loopback. The [app guide](qqq-all-app/README.md) lists the environment contract and broker-management check.
 
-On merges to `develop`, [the image workflow](.github/workflows/publish-image.yml) verifies the reactor and publishes `ghcr.io/qrun-io/qqq-all:develop` only when the `qqq-all` container package is already public. If the package is absent, private, or cannot be read, image publication is skipped with a job summary while verification still runs. GitHub creates a new container package private by default, so the first image requires a deliberate, one-time bootstrap: an organization owner publishes an initial image, then changes the package visibility to **public** in GitHub package settings. Automatic develop publication starts only after that bootstrap.
+## Explore the app
 
-## Contributing
+Core seeds customers and orders in H2, order lines in SQLite, and product files under `./data`. Insert an order as Admin to publish an Artemis `orderEvents` message and trigger `syncOrder`; inspect its process trace. Run `SendWebhookEvent` as Admin, then inspect the demo webhook receipt. Core's mock Demo User can read but cannot edit webhook destinations or invoke delivery. Sample customer and order rows are merged on every start, so edits to those rows can be reset.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md), the [Code of Conduct](CODE_OF_CONDUCT.md), and the [security policy](SECURITY.md).
+Full adds sample tables on PostgreSQL, MySQL, MongoDB, MinIO S3, and SFTP. It includes OpenSearch customer quick search, table views, process tracing, workflows, geo addresses, SFTP import, and webhook administration with Keycloak role permissions. The `syncOrder` completion publication to RabbitMQ is configured in metadata and depends on QQQ ESB [Task 9](https://github.com/QRun-IO/qqq/pull/786) landing in QQQ 4.1; the app does not publish it through a separate workaround.
 
-## License
+To stop the full stack, run `docker compose --profile full down`. Add `--volumes` only when you intend to erase demo data. For a fresh Artemis volume, the configured login is required; old volumes created for anonymous access should be recreated. This reference stack uses demo credentials and is not a production deployment.
 
-Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+The [develop image workflow](.github/workflows/publish-image.yml) verifies the build and publishes to GHCR only after an organization owner bootstraps the container package and sets its visibility to public. Until then, image publication is skipped and local Compose remains available.
+
+## Contributing and license
+
+See [CONTRIBUTING.md](CONTRIBUTING.md), the [Code of Conduct](CODE_OF_CONDUCT.md), and the [security policy](SECURITY.md). Licensed under Apache-2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE).
