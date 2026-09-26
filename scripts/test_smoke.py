@@ -2,6 +2,7 @@
 """Contract tests for the HTTP smoke checks, without starting the application."""
 
 import json
+import os
 import shutil
 import socketserver
 import subprocess
@@ -29,6 +30,8 @@ class DemoHandler(BaseHTTPRequestHandler):
     orders = 0
     product_name = "QRun Starter Kit"
     trace_label = "Sync Order - demo"
+    trace_order_id = None
+    inserted_marker = None
 
     def log_message(self, *_args):
         pass
@@ -57,12 +60,15 @@ class DemoHandler(BaseHTTPRequestHandler):
         if self.path == "/data/order/":
             assert body["orderNo"].startswith("SMOKE-")
             type(self).orders += 1
+            type(self).trace_order_id = 100 + self.orders
+            type(self).inserted_marker = body["orderNo"]
             return self.send_json({"records": [{"values": {"id": 100 + self.orders}}]})
         if self.path.startswith("/qqq/v1/table/") and self.path.endswith("/query"):
             table = self.path.split("/")[4]
             if table == "processTrace":
                 records = [{"recordLabel": self.trace_label,
-                            "values": {"id": i, "processUUID": f"trace-{i}"}}
+                            "values": {"id": i, "processUUID": f"trace-{i}",
+                                       "keyRecordId": self.trace_order_id}}
                            for i in range(self.orders)]
             else:
                 values = {
@@ -72,6 +78,9 @@ class DemoHandler(BaseHTTPRequestHandler):
                     "product": {"id": 1, "name": self.product_name},
                 }
                 records = [{"values": values.get(table, {"id": 1})}]
+                if table == "order" and self.inserted_marker:
+                    records.append({"values": {"id": 100 + self.orders,
+                                                "orderNo": self.inserted_marker}})
             return self.send_json({"records": records})
         self.send_error(404)
 
@@ -87,6 +96,8 @@ class DemoHandler(BaseHTTPRequestHandler):
 class SmokeTest(unittest.TestCase):
     def setUp(self):
         DemoHandler.orders = 0
+        DemoHandler.trace_order_id = None
+        DemoHandler.inserted_marker = None
 
     def test_core_runner_fails_promptly_when_jar_exits(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -112,6 +123,29 @@ class SmokeTest(unittest.TestCase):
             self.assertTrue(20000 <= keycloak_port < 30000)
             self.assertNotEqual(app_port, keycloak_port)
             self.assertNotEqual("example", values["POSTGRES_PASSWORD"])
+
+    def test_full_runner_supplies_generated_credentials_to_http_checks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "compose.yaml").write_text("services: {}\n")
+            values = {"QQQ_ALL_PORT": "20001", "KEYCLOAK_PORT": "20002",
+                      "DEMO_USER_PASSWORD": "generated-user",
+                      "DEMO_ADMIN_PASSWORD": "generated-admin",
+                      "RABBITMQ_PASSWORD": "generated-rabbit"}
+
+            def verify_credentials(*_args):
+                for key in ("DEMO_USER_PASSWORD", "DEMO_ADMIN_PASSWORD", "RABBITMQ_PASSWORD"):
+                    self.assertEqual(values[key], os.environ[key])
+
+            with (mock.patch.object(run_full_smoke, "ROOT", root),
+                  mock.patch.object(run_full_smoke, "demo_environment", return_value=values),
+                  mock.patch.object(run_full_smoke, "published_port", return_value=20003),
+                  mock.patch.object(run_full_smoke.subprocess, "run",
+                                    return_value=subprocess.CompletedProcess([], 0)),
+                  mock.patch.object(run_full_smoke, "check_full", side_effect=verify_credentials) as check,
+                  mock.patch.dict(os.environ, {}, clear=False)):
+                run_full_smoke.main()
+                check.assert_called_once()
 
     def test_core_checks_public_http_behavior(self):
         server = SmokeServer(("127.0.0.1", 0), DemoHandler)
@@ -177,6 +211,30 @@ class SmokeTest(unittest.TestCase):
         try:
             client = SmokeClient(f"http://127.0.0.1:{server.server_port}")
             self.assertEqual("trace-0", check_artemis_round_trip(client, timeout=2))
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+
+    def test_artemis_rejects_trace_for_another_order(self):
+        class WrongOrderTrace(DemoHandler):
+            trace_order_id = 999
+
+            def do_POST(self):
+                if self.path == "/data/order/":
+                    body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                    assert body["orderNo"].startswith("SMOKE-")
+                    type(self).orders += 1
+                    return self.send_json({"records": [{"values": {"id": 101}}]})
+                return super().do_POST()
+
+        server = SmokeServer(("127.0.0.1", 0), WrongOrderTrace)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            client = SmokeClient(f"http://127.0.0.1:{server.server_port}")
+            with self.assertRaisesRegex(AssertionError, "Artemis.*syncOrder"):
+                check_artemis_round_trip(client, timeout=0.3)
         finally:
             server.shutdown()
             server.server_close()

@@ -108,11 +108,13 @@ class CoreApplicationTest
 
             waitFor(() -> QEsbRuntime.getInstance().getRunner("syncOrder.orderEvents") != null
                && QEsbRuntime.getInstance().getRunner("syncOrder.orderEvents").getState() == EsbTriggerState.RUNNING);
-            new InsertAction().execute(new InsertInput("order").withRecords(List.of(
+            Integer insertedOrderId = new InsertAction().execute(new InsertInput("order").withRecords(List.of(
                new QRecord().withValue("orderNo", "ORD-1002")
-                  .withValue("customerId", 2).withValue("status", "NEW"))));
+                  .withValue("customerId", 2).withValue("status", "NEW"))))
+               .getRecords().getFirst().getValueInteger("id");
             waitFor(() -> QqqAllApplication.SyncOrderStep.getRunCount() > 0);
-            waitFor(() -> !new QueryAction().execute(new QueryInput("processTrace")).getRecords().isEmpty());
+            waitFor(() -> new QueryAction().execute(new QueryInput("processTrace")).getRecords().stream()
+               .anyMatch(trace -> insertedOrderId.equals(trace.getValueInteger("keyRecordId"))));
             waitFor(() -> !new QueryAction().execute(new QueryInput("webhookEvent")).getRecords().isEmpty());
 
             HttpResponse<String> receipts = client.send(HttpRequest.newBuilder()

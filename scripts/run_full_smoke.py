@@ -63,6 +63,7 @@ def main():
     project = "qqqallsmoke" + secrets.token_hex(4)
     environment = os.environ.copy()
     environment.update(values)
+    os.environ.update(values)
     with tempfile.TemporaryDirectory(prefix="qqq-all-full-smoke-") as directory:
         env_file = Path(directory) / "compose.env"
         env_file.write_text("".join(f"{key}={value}\n" for key, value in values.items()))

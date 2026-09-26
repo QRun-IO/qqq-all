@@ -24,6 +24,7 @@ import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
 import com.kingsrook.qqq.backend.core.model.metadata.processes.QBackendStepMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.processes.QProcessMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.tables.QTableMetaData;
+import com.kingsrook.qqq.backend.core.processes.tracing.ProcessTracerKeyRecordMessage;
 import com.kingsrook.qqq.backend.module.filesystem.base.model.metadata.Cardinality;
 import com.kingsrook.qqq.backend.module.filesystem.base.model.metadata.RecordFormat;
 import com.kingsrook.qqq.backend.module.filesystem.local.model.metadata.FilesystemBackendMetaData;
@@ -31,6 +32,7 @@ import com.kingsrook.qqq.backend.module.filesystem.local.model.metadata.Filesyst
 import com.kingsrook.qqq.backend.module.rdbms.model.metadata.RDBMSBackendMetaData;
 import com.kingsrook.qqq.backend.module.rdbms.model.metadata.RDBMSTableBackendDetails;
 import com.kingsrook.qqq.backend.module.sqlite.model.metadata.SQLiteBackendMetaData;
+import com.kingsrook.qqq.esb.envelope.EsbEvent;
 import com.kingsrook.qqq.esb.model.EsbDestinationType;
 import com.kingsrook.qqq.esb.model.EsbInstanceMetaData;
 import com.kingsrook.qqq.esb.model.EsbProcessMetaData;
@@ -41,6 +43,7 @@ import com.kingsrook.qqq.esb.model.EsbTablePublication;
 import com.kingsrook.qqq.esb.model.EsbTrigger;
 import com.kingsrook.qqq.esb.model.QEsbDestinationMetaData;
 import com.kingsrook.qqq.esb.model.QEsbProviderMetaData;
+import com.kingsrook.qqq.esb.runtime.EsbTriggerHandler;
 import com.kingsrook.qqq.middleware.health.JavalinHealthRouteProvider;
 import com.kingsrook.qqq.middleware.health.indicators.MemoryHealthIndicator;
 import com.kingsrook.qqq.middleware.health.model.metadata.HealthCheckMetaData;
@@ -155,6 +158,19 @@ public final class QqqAllApplication extends AbstractQQQApplication
       @Override
       public void run(RunBackendStepInput input, RunBackendStepOutput output) throws QException
       {
+         if(input.getValue(EsbTriggerHandler.VALUE_ESB_MESSAGES) instanceof List<?> messages)
+         {
+            for(Object message : messages)
+            {
+               if(message instanceof EsbEvent event
+                  && event.getSource().endsWith("/table/order") && event.getSubject() != null)
+               {
+                  Integer orderId = Integer.valueOf(event.getSubject());
+                  input.getProcessTracer().ifPresent(tracer -> tracer.handleMessage(input,
+                     new ProcessTracerKeyRecordMessage("order", orderId)));
+               }
+            }
+         }
          RUN_COUNT.incrementAndGet();
       }
 

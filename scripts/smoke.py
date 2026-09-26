@@ -144,13 +144,14 @@ def trigger_order(client):
         "orderNo": marker, "customerId": 1, "status": "NEW"
     })
     inserted = response.get("records", [])
-    if not inserted or not inserted[0].get("values", {}).get("id"):
+    order_id = inserted[0].get("values", {}).get("id") if inserted else None
+    if not order_id:
         raise AssertionError("order insert did not return an ID")
-    return before, marker
+    return before, order_id, marker
 
 
 def check_artemis_round_trip(client, timeout):
-    before, _marker = trigger_order(client)
+    before, order_id, marker = trigger_order(client)
     process_uuid = None
 
     def new_sync_trace():
@@ -159,6 +160,7 @@ def check_artemis_round_trip(client, timeout):
             values = record.get("values", {})
             if (values.get("id") not in before
                     and record.get("recordLabel", "").startswith("Sync Order -")
+                    and values.get("keyRecordId") == order_id
                     and values.get("processUUID")):
                 process_uuid = values["processUUID"]
                 return True
@@ -166,6 +168,7 @@ def check_artemis_round_trip(client, timeout):
 
     wait_for("Artemis syncOrder trace",
              new_sync_trace, timeout)
+    client.require_record("order", "orderNo", marker)
     print("Artemis order event round trip: OK")
     return process_uuid
 
