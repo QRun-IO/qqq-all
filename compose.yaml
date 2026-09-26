@@ -59,6 +59,7 @@ services:
       QQQ_ALL_RABBITMQ_USER: ${RABBITMQ_USER:-qqq}
       QQQ_ALL_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}
       QQQ_ALL_RABBITMQ_MANAGEMENT_URL: http://rabbitmq:15672
+      QQQ_ALL_OPENSEARCH_HOST: opensearch
       QQQ_ALL_SMTP_HOST: mailpit
       QQQ_ALL_OIDC_BASE_URL: http://keycloak.localhost:${KEYCLOAK_PORT:-8081}/realms/qqq-all
       QQQ_ALL_OIDC_CLIENT_ID: qqq-all
