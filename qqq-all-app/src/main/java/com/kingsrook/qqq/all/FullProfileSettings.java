@@ -20,7 +20,8 @@ final class FullProfileSettings
       "S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY", "S3_SECRET_KEY",
       "SFTP_HOST", "SFTP_USER", "SFTP_PASSWORD",
       "ARTEMIS_URL", "RABBITMQ_URL", "RABBITMQ_USER", "RABBITMQ_PASSWORD",
-      "SMTP_HOST", "OIDC_BASE_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET");
+      "SMTP_HOST", "OIDC_BASE_URL", "OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET",
+      "OPENSEARCH_HOST");
 
    private final Map<String, String> values;
 

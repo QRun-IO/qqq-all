@@ -51,11 +51,18 @@ public final class QqqAllApplication extends AbstractQQQApplication
 {
    private final Path   dataDirectory;
    private final String brokerUrl;
+   private final boolean includeDemoQbits;
 
    public QqqAllApplication(Path dataDirectory, String brokerUrl)
    {
+      this(dataDirectory, brokerUrl, true);
+   }
+
+   QqqAllApplication(Path dataDirectory, String brokerUrl, boolean includeDemoQbits)
+   {
       this.dataDirectory = dataDirectory;
       this.brokerUrl = brokerUrl;
+      this.includeDemoQbits = includeDemoQbits;
    }
 
    public static void main(String[] args) throws Exception
@@ -130,6 +137,13 @@ public final class QqqAllApplication extends AbstractQQQApplication
          .withEndpointPath("/health").withIndicators(List.of(new MemoryHealthIndicator().withThreshold(99))));
       QJavalinMetaData.ofOrWithNew(instance)
          .withAdditionalRouteProviderReference(new QCodeReference(JavalinHealthRouteProvider.class));
+      if(includeDemoQbits)
+      {
+         DemoQBits.addCore(instance, "h2");
+         DemoUsers.protectDemoTables(instance);
+         QJavalinMetaData.ofOrWithNew(instance)
+            .withAdditionalRouteProviderReference(new QCodeReference(DemoOrderWebhookReceiver.class));
+      }
       return instance;
    }
 

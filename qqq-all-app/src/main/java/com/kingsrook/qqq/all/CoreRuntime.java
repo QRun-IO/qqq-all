@@ -9,6 +9,9 @@ package com.kingsrook.qqq.all;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.file.Path;
+import com.kingsrook.qbits.webhooks.actions.WebhookSubscriptionsHelper;
+import com.kingsrook.qqq.backend.core.context.QContext;
+import com.kingsrook.qqq.backend.core.model.session.QSystemUserSession;
 import com.kingsrook.qqq.middleware.javalin.QApplicationLauncher;
 import com.kingsrook.qqq.middleware.javalin.QApplicationLauncherConfig;
 import org.apache.activemq.artemis.core.config.Configuration;
@@ -36,6 +39,8 @@ final class CoreRuntime implements AutoCloseable
       Integer brokerPort = findFreePort();
       Path brokerDirectory = dataDirectory.resolve("artemis").toAbsolutePath();
       String brokerUrl = "tcp://127.0.0.1:" + brokerPort;
+      DemoOrderWebhookReceiver.clear();
+      DemoQBitData.ensureSchema(dataDirectory, new QqqAllApplication(dataDirectory, brokerUrl).defineQInstance(), port);
       Configuration configuration = new ConfigurationImpl()
          .setPersistenceEnabled(false).setSecurityEnabled(false).setJMXManagementEnabled(false)
          .setBindingsDirectory(brokerDirectory.resolve("bindings").toString())
@@ -52,6 +57,15 @@ final class CoreRuntime implements AutoCloseable
             new QApplicationLauncherConfig().withRegisterShutdownHook(false)
                .withServerCustomizer(server -> server.withPort(port)
                   .withJavalinConfigCustomizer(config -> config.jetty.host = "127.0.0.1")));
+         QContext.init(launcher.getQInstance(), new QSystemUserSession());
+         try
+         {
+            WebhookSubscriptionsHelper.clearMemoizations();
+         }
+         finally
+         {
+            QContext.clear();
+         }
          return new CoreRuntime(broker, launcher);
       }
       catch(Exception | LinkageError e)

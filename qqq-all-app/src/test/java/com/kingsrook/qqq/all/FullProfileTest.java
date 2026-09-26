@@ -52,7 +52,7 @@ class FullProfileTest
       assertEquals("http://minio.example.test:9000",
          ((MinioBackendMetaData) instance.getBackend("s3")).getEndpoint());
       assertEquals("s3", instance.getTable("document").getBackendName());
-      assertEquals("sftp", instance.getTable("importFile").getBackendName());
+      assertEquals("sftp", instance.getTable("externalImportFile").getBackendName());
 
       EsbInstanceMetaData esb = EsbInstanceMetaData.of(instance);
       assertEquals("tcp://artemis.example.test:61616", esb.getProvider("artemis").getUrl());
@@ -101,6 +101,8 @@ class FullProfileTest
       values.put("QQQ_ALL_OIDC_BASE_URL", "https://keycloak.example.test/realms/demo");
       values.put("QQQ_ALL_OIDC_CLIENT_ID", "qqq-all");
       values.put("QQQ_ALL_OIDC_CLIENT_SECRET", "fixture");
+      values.put("QQQ_ALL_OPENSEARCH_HOST", "127.0.0.1");
+      values.put("QQQ_ALL_OPENSEARCH_PORT", "1");
       return values;
    }
 }

@@ -15,8 +15,12 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import com.kingsrook.qbits.webhooks.model.WebhookEventStatus;
 import com.kingsrook.qqq.backend.core.actions.tables.InsertAction;
 import com.kingsrook.qqq.backend.core.actions.tables.QueryAction;
+import com.kingsrook.qqq.backend.core.actions.processes.RunProcessAction;
+import com.kingsrook.qqq.backend.core.model.actions.processes.RunProcessInput;
+import com.kingsrook.qqq.backend.core.actions.processes.QProcessCallbackFactory;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.model.actions.tables.insert.InsertInput;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QueryInput;
@@ -62,6 +66,28 @@ class CoreApplicationTest
          assertEquals(200, dashboard.statusCode());
          assertTrue(dashboard.body().contains("html"));
 
+         HttpResponse<String> demoRead = client.send(HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/qqq/v1/table/order/query"))
+            .header("Cookie", "sessionId=" + DemoUsers.DEMO_SESSION)
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString("{}"))
+            .build(), HttpResponse.BodyHandlers.ofString());
+         assertEquals(200, demoRead.statusCode(), demoRead.body());
+         HttpResponse<String> demoInsert = insertOrder(client, port, DemoUsers.DEMO_SESSION, "ORD-DENIED");
+         assertEquals(403, demoInsert.statusCode());
+         assertEquals(403, updateWebhook(client, port, DemoUsers.DEMO_SESSION,
+            "webhook", "{\"url\":\"http://127.0.0.1:1/\"}").statusCode());
+         assertEquals(403, updateWebhook(client, port, DemoUsers.DEMO_SESSION,
+            "webhookSubscription", "{\"activeStatusId\":3}").statusCode());
+         assertEquals(403, runWebhookProcess(client, port, DemoUsers.DEMO_SESSION).statusCode());
+         assertEquals(200, updateWebhook(client, port, DemoUsers.ADMIN_SESSION,
+            "webhook", "{\"url\":\"http://127.0.0.1:" + port + "/demo/order-webhook\"}").statusCode());
+         assertEquals(200, updateWebhook(client, port, DemoUsers.ADMIN_SESSION,
+            "webhookSubscription", "{\"activeStatusId\":1}").statusCode());
+         HttpResponse<String> adminInsert = insertOrder(client, port, DemoUsers.ADMIN_SESSION, "ORD-ADMIN");
+         assertEquals(200, adminInsert.statusCode(), adminInsert.body());
+         assertEquals(200, runWebhookProcess(client, port, DemoUsers.ADMIN_SESSION).statusCode());
+
          QContext.init(runtime.getLauncher().getQInstance(), new QSystemUserSession());
          try
          {
@@ -71,10 +97,14 @@ class CoreApplicationTest
             assertEquals("core:demo", mockAuth.createSession(runtime.getLauncher().getQInstance(),
                Map.of("sessionId", DemoUsers.DEMO_SESSION)).getUser().getIdReference());
 
-            for(String table : List.of("customer", "order", "orderLine", "product"))
+            for(String table : List.of("customer", "order", "orderLine", "product", "address", "shipping_city"))
             {
                assertFalse(new QueryAction().execute(new QueryInput(table)).getRecords().isEmpty(), table);
             }
+            assertEquals("Customer Directory", new QueryAction().execute(new QueryInput("TableView"))
+               .getRecords().getFirst().getValueString("name"));
+            assertEquals("Order Status Review", new QueryAction().execute(new QueryInput("workflow"))
+               .getRecords().getFirst().getValueString("name"));
 
             waitFor(() -> QEsbRuntime.getInstance().getRunner("syncOrder.orderEvents") != null
                && QEsbRuntime.getInstance().getRunner("syncOrder.orderEvents").getState() == EsbTriggerState.RUNNING);
@@ -82,6 +112,27 @@ class CoreApplicationTest
                new QRecord().withValue("orderNo", "ORD-1002")
                   .withValue("customerId", 2).withValue("status", "NEW"))));
             waitFor(() -> QqqAllApplication.SyncOrderStep.getRunCount() > 0);
+            waitFor(() -> !new QueryAction().execute(new QueryInput("processTrace")).getRecords().isEmpty());
+            waitFor(() -> !new QueryAction().execute(new QueryInput("webhookEvent")).getRecords().isEmpty());
+
+            HttpResponse<String> receipts = client.send(HttpRequest.newBuilder()
+               .uri(URI.create("http://127.0.0.1:" + port + "/demo/order-webhook-receipts"))
+               .build(), HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, receipts.statusCode(), receipts.body());
+            waitFor(() -> client.send(HttpRequest.newBuilder()
+               .uri(URI.create("http://127.0.0.1:" + port + "/demo/order-webhook-receipts"))
+               .build(), HttpResponse.BodyHandlers.ofString()).body().contains("ORD-ADMIN"));
+            waitFor(() -> new QueryAction().execute(new QueryInput("webhookEvent")).getRecords().stream()
+               .anyMatch(event -> WebhookEventStatus.DELIVERED.getId().equals(event.getValueInteger("eventStatusId"))));
+
+            RunProcessInput workflow = new RunProcessInput();
+            workflow.setProcessName("RunRecordWorkflow");
+            workflow.setCallback(QProcessCallbackFactory.forPrimaryKey("id", 1));
+            workflow.addValue("tableName", "order");
+            workflow.addValue("workflowId", 1);
+            workflow.setFrontendStepBehavior(RunProcessInput.FrontendStepBehavior.SKIP);
+            new RunProcessAction().execute(workflow);
+            assertFalse(new QueryAction().execute(new QueryInput("workflowRunLog")).getRecords().isEmpty());
          }
          finally
          {
@@ -90,13 +141,47 @@ class CoreApplicationTest
       }
    }
 
-   private static void waitFor(java.util.function.BooleanSupplier condition) throws Exception
+   private static HttpResponse<String> updateWebhook(HttpClient client, Integer port, String sessionId,
+      String tableName, String body) throws Exception
+   {
+      return client.send(HttpRequest.newBuilder()
+         .uri(URI.create("http://127.0.0.1:" + port + "/data/" + tableName + "/1"))
+         .header("Cookie", "sessionId=" + sessionId)
+         .header("Content-Type", "application/json")
+         .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
+         .build(), HttpResponse.BodyHandlers.ofString());
+   }
+
+   private static HttpResponse<String> runWebhookProcess(HttpClient client, Integer port, String sessionId)
+      throws Exception
+   {
+      return client.send(HttpRequest.newBuilder()
+         .uri(URI.create("http://127.0.0.1:" + port + "/processes/SendWebhookEvent/run?webhookId=1"))
+         .header("Cookie", "sessionId=" + sessionId)
+         .header("Content-Type", "application/json")
+         .POST(HttpRequest.BodyPublishers.ofString("{}"))
+         .build(), HttpResponse.BodyHandlers.ofString());
+   }
+
+   private static HttpResponse<String> insertOrder(HttpClient client, Integer port, String sessionId, String orderNo)
+      throws Exception
+   {
+      return client.send(HttpRequest.newBuilder()
+         .uri(URI.create("http://127.0.0.1:" + port + "/data/order/"))
+         .header("Cookie", "sessionId=" + sessionId)
+         .header("Content-Type", "application/json")
+         .POST(HttpRequest.BodyPublishers.ofString("{\"orderNo\":\"" + orderNo
+            + "\",\"customerId\":1,\"status\":\"NEW\"}"))
+         .build(), HttpResponse.BodyHandlers.ofString());
+   }
+
+   private static void waitFor(java.util.concurrent.Callable<Boolean> condition) throws Exception
    {
       long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
-      while(!condition.getAsBoolean() && System.nanoTime() < deadline)
+      while(!condition.call() && System.nanoTime() < deadline)
       {
          Thread.sleep(50);
       }
-      assertTrue(condition.getAsBoolean());
+      assertTrue(condition.call());
    }
 }
