@@ -108,7 +108,8 @@ final class DemoQBits
          .produce(instance).addSelfToInstance(instance);
       WebhooksRegistry.ofOrWithNew(instance).registerWebhookEventType(new WebhookEventType()
          .withName("orderStored").withLabel("Order Stored")
-         .withCategory(WebhookEventCategory.STORE).withTableName("order"));
+         .withCategory(WebhookEventCategory.STORE).withTableName("order")
+         .withCustomizer(new QCodeReference(DemoOrderWebhookContent.class)));
 
       new WorkflowsQBitProducer()
          .withQBitConfig(new WorkflowsQBitConfig().withTableMetaDataCustomizer(tableCustomizer))

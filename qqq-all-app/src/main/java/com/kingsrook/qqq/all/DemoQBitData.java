@@ -26,7 +26,7 @@ final class DemoQBitData
    {
    }
 
-   static void ensureSchema(Path dataDirectory, QInstance instance) throws SQLException
+   static void ensureSchema(Path dataDirectory, QInstance instance, Integer port) throws SQLException
    {
       try(Connection connection = DriverManager.getConnection(
          "jdbc:h2:file:" + CoreData.h2DatabaseName(dataDirectory) + ";MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
@@ -78,6 +78,11 @@ final class DemoQBitData
          statement.execute("MERGE INTO workflow_step (id, workflow_revision_id, step_no, workflow_step_type_name, summary, input_values_json) "
             + "KEY (id) VALUES (1, 1, 1, 'updateInputRecordField', 'Mark order reviewed', "
             + "'{\"fieldName\":\"status\",\"value\":\"REVIEWED\"}')");
+         statement.execute("MERGE INTO webhook (id, name, url, active_status_id, health_status_id) KEY (id) "
+            + "VALUES (1, 'Local Order Receiver', 'http://127.0.0.1:" + port + "/demo/order-webhook', 1, 1)");
+         statement.execute("MERGE INTO webhook_subscription (id, webhook_id, webhook_event_type_name, "
+            + "active_status_id, api_name, api_version, create_date) KEY (id) "
+            + "VALUES (1, 1, 'orderStored', 1, 'none', 'none', CURRENT_TIMESTAMP)");
       }
    }
 

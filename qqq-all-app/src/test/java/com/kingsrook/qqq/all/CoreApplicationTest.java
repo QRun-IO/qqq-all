@@ -65,6 +65,18 @@ class CoreApplicationTest
          assertEquals(200, dashboard.statusCode());
          assertTrue(dashboard.body().contains("html"));
 
+         HttpResponse<String> demoRead = client.send(HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/qqq/v1/table/order/query"))
+            .header("Cookie", "sessionId=" + DemoUsers.DEMO_SESSION)
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString("{}"))
+            .build(), HttpResponse.BodyHandlers.ofString());
+         assertEquals(200, demoRead.statusCode(), demoRead.body());
+         HttpResponse<String> demoInsert = insertOrder(client, port, DemoUsers.DEMO_SESSION, "ORD-DENIED");
+         assertEquals(403, demoInsert.statusCode());
+         HttpResponse<String> adminInsert = insertOrder(client, port, DemoUsers.ADMIN_SESSION, "ORD-ADMIN");
+         assertEquals(200, adminInsert.statusCode(), adminInsert.body());
+
          QContext.init(runtime.getLauncher().getQInstance(), new QSystemUserSession());
          try
          {
@@ -90,6 +102,18 @@ class CoreApplicationTest
                   .withValue("customerId", 2).withValue("status", "NEW"))));
             waitFor(() -> QqqAllApplication.SyncOrderStep.getRunCount() > 0);
             waitFor(() -> !new QueryAction().execute(new QueryInput("processTrace")).getRecords().isEmpty());
+            waitFor(() -> !new QueryAction().execute(new QueryInput("webhookEvent")).getRecords().isEmpty());
+
+            RunProcessInput sendWebhook = new RunProcessInput();
+            sendWebhook.setProcessName("SendWebhookEvent");
+            sendWebhook.addValue("webhookId", 1);
+            sendWebhook.setFrontendStepBehavior(RunProcessInput.FrontendStepBehavior.SKIP);
+            new RunProcessAction().execute(sendWebhook);
+            HttpResponse<String> receipts = client.send(HttpRequest.newBuilder()
+               .uri(URI.create("http://127.0.0.1:" + port + "/demo/order-webhook-receipts"))
+               .build(), HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, receipts.statusCode(), receipts.body());
+            assertTrue(receipts.body().contains("ORD-ADMIN"), receipts.body());
 
             RunProcessInput workflow = new RunProcessInput();
             workflow.setProcessName("RunRecordWorkflow");
@@ -105,6 +129,18 @@ class CoreApplicationTest
             QContext.clear();
          }
       }
+   }
+
+   private static HttpResponse<String> insertOrder(HttpClient client, Integer port, String sessionId, String orderNo)
+      throws Exception
+   {
+      return client.send(HttpRequest.newBuilder()
+         .uri(URI.create("http://127.0.0.1:" + port + "/data/order/"))
+         .header("Cookie", "sessionId=" + sessionId)
+         .header("Content-Type", "application/json")
+         .POST(HttpRequest.BodyPublishers.ofString("{\"orderNo\":\"" + orderNo
+            + "\",\"customerId\":1,\"status\":\"NEW\"}"))
+         .build(), HttpResponse.BodyHandlers.ofString());
    }
 
    private static void waitFor(java.util.concurrent.Callable<Boolean> condition) throws Exception

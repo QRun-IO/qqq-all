@@ -140,6 +140,9 @@ public final class QqqAllApplication extends AbstractQQQApplication
       if(includeDemoQbits)
       {
          DemoQBits.addCore(instance, "h2");
+         DemoUsers.protectDemoTables(instance);
+         QJavalinMetaData.ofOrWithNew(instance)
+            .withAdditionalRouteProviderReference(new QCodeReference(DemoOrderWebhookReceiver.class));
       }
       return instance;
    }
