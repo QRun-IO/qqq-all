@@ -45,7 +45,54 @@ def coordinates(path):
     return value("groupId"), value("artifactId"), value("version")
 
 
-def validate_published_poms(parent_path, bom_path, version, local_bom=None):
+def managed_dependencies(path):
+    root = ElementTree.parse(path).getroot()
+    namespace = xml_namespace(root)
+    values = properties(path)
+    if root.findall(f"{namespace}profiles/{namespace}profile/{namespace}dependencyManagement"):
+        raise GateError(f"Profile-managed dependency override in {path}")
+    dependencies = root.find(f"{namespace}dependencyManagement/{namespace}dependencies")
+    if dependencies is None:
+        raise GateError(f"Missing dependencyManagement in {path}")
+
+    def field(dependency, name, default=""):
+        return (dependency.findtext(f"{namespace}{name}") or default).strip()
+
+    managed = []
+    for dependency in dependencies.findall(f"{namespace}dependency"):
+        version = field(dependency, "version")
+        reference = re.fullmatch(r"\$\{([^}]+)\}", version)
+        if reference:
+            version = values.get(reference.group(1), "")
+        if not version or "${" in version or "SNAPSHOT" in version.upper():
+            raise GateError(f"Unreleased managed dependency in {path}: "
+                            f"{field(dependency, 'artifactId')}")
+        managed.append((field(dependency, "groupId"), field(dependency, "artifactId"),
+                        version, field(dependency, "type", "jar"),
+                        field(dependency, "scope", "compile"),
+                        field(dependency, "classifier")))
+    if not managed:
+        raise GateError(f"No managed dependencies in {path}")
+    return managed
+
+
+def validate_managed_bom(path, version):
+    managed = managed_dependencies(path)
+    entries = {(group, artifact): (pin, kind, scope) for group, artifact, pin, kind, scope, _ in managed}
+    if len(entries) != len(managed):
+        raise GateError(f"Duplicate managed dependency in {path}")
+    if entries.get(("com.kingsrook.qqq", "qqq-bom-pom")) != (version, "pom", "import"):
+        raise GateError(f"QQQ BOM import differs from {version} in {path}")
+    values = properties(path)
+    for name in QBITS:
+        artifact = f"qbit-{name}"
+        if entries.get(("com.kingsrook.qbits", artifact)) != (
+                values.get(f"{artifact}.version"), "jar", "compile"):
+            raise GateError(f"Managed {artifact} differs from its release pin in {path}")
+    return managed
+
+
+def validate_published_poms(parent_path, bom_path, version, local_bom):
     expected = (
         (parent_path, "qqq-all-parent"),
         (bom_path, "qqq-all-bom"),
@@ -61,11 +108,12 @@ def validate_published_poms(parent_path, bom_path, version, local_bom=None):
         value = published.get(key, "")
         if not value or "SNAPSHOT" in value.upper():
             raise GateError(f"Published BOM {key} is not a release")
-    if local_bom is not None:
-        local = properties(local_bom)
-        for key in ("qqq.version", *(f"qbit-{name}.version" for name in QBITS)):
-            if published.get(key) != local.get(key):
-                raise GateError(f"Published BOM {key} differs from release source")
+    local = properties(local_bom)
+    for key in ("qqq.version", *(f"qbit-{name}.version" for name in QBITS)):
+        if published.get(key) != local.get(key):
+            raise GateError(f"Published BOM {key} differs from release source")
+    if validate_managed_bom(bom_path, version) != validate_managed_bom(local_bom, version):
+        raise GateError("Published BOM dependencyManagement differs from release source")
 
 
 def validate_poms(root, version):
@@ -83,6 +131,7 @@ def validate_poms(root, version):
     for key, value in bom.items():
         if key.endswith(".version") and "SNAPSHOT" in value.upper():
             raise GateError(f"{key} still points to a snapshot")
+    validate_managed_bom(root / "qqq-all-bom/pom.xml", version)
 
 
 def validate_smoke(run, jobs, sha):
