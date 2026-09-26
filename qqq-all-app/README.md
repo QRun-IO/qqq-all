@@ -11,7 +11,9 @@ The core app binds to `127.0.0.1` and serves the Next dashboard at `http://127.0
 
 `QQQ_ALL_BIND_HOST` can select another interface when intentionally running behind a container port mapping. The Compose core service sets it to `0.0.0.0` inside the container while publishing only on host loopback.
 
-Core uses mock authentication. The `sessionId` cookie selects the two fixed demo identities: `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa` for Admin and `dddddddd-dddd-4ddd-8ddd-dddddddddddd` for Demo User. Any other session ID uses Demo User. These identities are for local demonstrations; role-based permissions are wired in task C5.
+Core uses mock authentication. The `sessionId` cookie selects the two fixed demo identities: `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa` for Admin and `dddddddd-dddd-4ddd-8ddd-dddddddddddd` for Demo User. Any other session ID uses Demo User. Admin can read and write the customer, order, order-line, product, and address tables; Demo User can read them but cannot write them. These identities are for local demonstrations. Quick search is disabled in core because it requires OpenSearch; the customer list remains available through the normal table query API.
+
+The core demo seeds a customer table view, a shipping address linked to the geo country/state/city tables, and an order review workflow. The `RunRecordWorkflow` process can run that workflow against an order; `syncOrder` writes a process trace after an order event. It also seeds an active `orderStored` webhook subscription to its receiver at `/demo/order-webhook`. Insert an order as Admin, run `SendWebhookEvent` as Admin, and inspect `/demo/order-webhook-receipts` to see the delivered payload. Demo User can read webhook records but cannot edit their configuration or invoke the delivery process. The receiver is available only in the core profile, which Compose publishes on host loopback.
 
 ## Full profile
 
@@ -29,8 +31,9 @@ Configure the following environment variables before starting the same jar:
 | ESB | `QQQ_ALL_ARTEMIS_URL`, `QQQ_ALL_ARTEMIS_USER`, `QQQ_ALL_ARTEMIS_PASSWORD`, `QQQ_ALL_ARTEMIS_MANAGEMENT_URL`, `QQQ_ALL_RABBITMQ_URL`, `QQQ_ALL_RABBITMQ_USER`, `QQQ_ALL_RABBITMQ_PASSWORD`, `QQQ_ALL_RABBITMQ_MANAGEMENT_URL` | — |
 | Mailpit SMTP | `QQQ_ALL_SMTP_HOST` | `QQQ_ALL_SMTP_PORT` (1025) |
 | Keycloak OIDC | `QQQ_ALL_OIDC_BASE_URL`, `QQQ_ALL_OIDC_CLIENT_ID`, `QQQ_ALL_OIDC_CLIENT_SECRET` | `QQQ_ALL_OIDC_EXTERNAL_BASE_URL` (base URL), `QQQ_ALL_OIDC_SCOPES` (`openid email profile`) |
+| OpenSearch quick search | `QQQ_ALL_OPENSEARCH_HOST` | `QQQ_ALL_OPENSEARCH_PORT` (9200), `QQQ_ALL_OPENSEARCH_INDEX` (`qqq-all-customers`), `QQQ_ALL_OPENSEARCH_USER`, `QQQ_ALL_OPENSEARCH_PASSWORD`, `QQQ_ALL_OPENSEARCH_SSL` (false) |
 
-The full app adds sample tables on each external backend, `orderEvents` on Artemis, and `orderSyncEvents` on RabbitMQ. Keycloak realm roles resolve by name against the PostgreSQL `role` table from `qbit-user-role-permissions`, then become QQQ session permissions. Unknown roles receive no permissions. The Compose profile provisions demo SQL tables, OAuth session and redirect-state tables, qbit permission tables and roles, and the MinIO bucket on first startup.
+The full app adds sample tables on each external backend, `orderEvents` on Artemis, and `orderSyncEvents` on RabbitMQ. Quick search is configured for customer `name` and `email`; run `quickSearchFullReindex` after OpenSearch and the customer data are ready. The SFTP integration adds its import source and staging tables plus `SFTPImportFileSyncProcess`; `externalImportFile` remains the direct SFTP file sample. Keycloak realm roles resolve by name against the PostgreSQL `role` table from `qbit-user-role-permissions`, then become QQQ session permissions. Unknown roles receive no permissions. Webhook tables and delivery processes require explicit permissions: the viewer role receives read access, while the admin role can edit destinations and run delivery. The Compose profile provisions demo SQL tables, OAuth session and redirect-state tables, qbit permission tables and roles, and the MinIO bucket on first startup; `infra/postgres/03-webhook-permissions.sql` adds webhook grants after the role seed.
 
 After starting the full Compose profile, run the opt-in broker management smoke test with the same broker credentials. For the supplied demo environment:
 

@@ -58,11 +58,14 @@ final class FullProfileApplication extends AbstractQQQApplication
    @Override
    public QInstance defineQInstance() throws QException
    {
-      QInstance instance = new QqqAllApplication(dataDirectory, settings.get("ARTEMIS_URL")).defineQInstance();
+      QInstance instance = new QqqAllApplication(dataDirectory, settings.get("ARTEMIS_URL"), false).defineQInstance();
       addBackends(instance);
       addTables(instance);
       addAuthentication(instance);
       addEsb(instance);
+      DemoQBits.addCore(instance, "postgres");
+      DemoQBits.addFull(instance, settings);
+      DemoUsers.protectWebhookResources(instance);
 
       EmailMessagingProviderMetaData mail = new EmailMessagingProviderMetaData()
          .withSmtpServer(settings.get("SMTP_HOST"))
@@ -122,7 +125,7 @@ final class FullProfileApplication extends AbstractQQQApplication
             .withRecordFormat(RecordFormat.JSON).withCardinality(Cardinality.MANY).withGlob("*.json"))
          .withField(new QFieldMetaData("id", QFieldType.INTEGER))
          .withField(new QFieldMetaData("name", QFieldType.STRING)));
-      instance.addTable(new QTableMetaData().withName("importFile").withLabel("Import File")
+      instance.addTable(new QTableMetaData().withName("externalImportFile").withLabel("External Import File")
          .withBackendName("sftp").withPrimaryKeyField("id")
          .withBackendDetails(new SFTPTableBackendDetails().withBasePath("imports")
             .withRecordFormat(RecordFormat.JSON).withCardinality(Cardinality.MANY).withGlob("*.json"))
