@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: QQQ Framework Issues
+    url: https://github.com/QRun-IO/qqq/issues
+    about: Bugs and feature requests for the QQQ framework itself
+  - name: QQQ Documentation Wiki
+    url: https://github.com/QRun-IO/qqq/wiki
+    about: Complete documentation, guides, and tutorials for QQQ
+  - name: GitHub Discussions
+    url: https://github.com/QRun-IO/qqq/discussions
+    about: Ask questions and discuss QQQ with the community
