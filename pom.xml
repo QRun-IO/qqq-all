@@ -50,6 +50,61 @@
       <maven.compiler.release>21</maven.compiler.release>
    </properties>
 
+   <profiles>
+      <!-- Select only the parent and BOM reactor: mvn -pl qqq-all-bom -am -Prelease-central deploy. -->
+      <profile>
+         <id>release-central</id>
+         <build>
+            <plugins>
+               <plugin>
+                  <groupId>org.apache.maven.plugins</groupId>
+                  <artifactId>maven-enforcer-plugin</artifactId>
+                  <version>3.5.0</version>
+                  <executions>
+                     <execution>
+                        <id>require-ga-revision</id>
+                        <phase>validate</phase>
+                        <goals><goal>enforce</goal></goals>
+                        <configuration>
+                           <rules>
+                              <requireProperty>
+                                 <property>revision</property>
+                                 <regex>^4[.]1[.]0$</regex>
+                                 <message>Central release requires a reviewed 4.1.0 source revision.</message>
+                              </requireProperty>
+                              <requireReleaseDeps/>
+                           </rules>
+                        </configuration>
+                     </execution>
+                  </executions>
+               </plugin>
+               <plugin>
+                  <groupId>org.apache.maven.plugins</groupId>
+                  <artifactId>maven-gpg-plugin</artifactId>
+                  <version>3.2.8</version>
+                  <executions>
+                     <execution>
+                        <id>sign-release-poms</id>
+                        <phase>verify</phase>
+                        <goals><goal>sign</goal></goals>
+                     </execution>
+                  </executions>
+               </plugin>
+               <plugin>
+                  <groupId>org.sonatype.central</groupId>
+                  <artifactId>central-publishing-maven-plugin</artifactId>
+                  <version>0.10.0</version>
+                  <extensions>true</extensions>
+                  <configuration>
+                     <publishingServerId>central</publishingServerId>
+                     <autoPublish>false</autoPublish>
+                  </configuration>
+               </plugin>
+            </plugins>
+         </build>
+      </profile>
+   </profiles>
+
    <repositories>
       <!-- QQQ 4.1.0-SNAPSHOT and other QRun-IO snapshots are published here until 4.1 ships. -->
       <repository>
