@@ -1,0 +1,10 @@
+.git
+.github
+.circleci
+.env
+docs
+qqq-all-bom
+qqq-all-bom-test
+qqq-all-app/src
+qqq-all-app/target/*
+!qqq-all-app/target/qqq-all-app.jar

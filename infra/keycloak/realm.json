@@ -1,0 +1,51 @@
+{
+  "realm": "qqq-all",
+  "enabled": true,
+  "displayName": "QQQ All Demo",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "roles": {
+    "realm": [
+      {"name": "admin", "description": "Full demo permissions"},
+      {"name": "viewer", "description": "Read-only demo permissions"}
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "qqq-all",
+      "name": "QQQ All Demo",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${OIDC_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:${QQQ_ALL_PORT}/*", "http://127.0.0.1:${QQQ_ALL_PORT}/*"],
+      "webOrigins": ["http://localhost:${QQQ_ALL_PORT}", "http://127.0.0.1:${QQQ_ALL_PORT}"],
+      "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "email"]
+    }
+  ],
+  "users": [
+    {
+      "username": "demo-admin",
+      "email": "admin@example.test",
+      "firstName": "Demo",
+      "lastName": "Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": ["admin"],
+      "credentials": [{"type": "password", "value": "${DEMO_ADMIN_PASSWORD}", "temporary": false}]
+    },
+    {
+      "username": "demo-user",
+      "email": "user@example.test",
+      "firstName": "Demo",
+      "lastName": "User",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": ["viewer"],
+      "credentials": [{"type": "password", "value": "${DEMO_USER_PASSWORD}", "temporary": false}]
+    }
+  ]
+}
