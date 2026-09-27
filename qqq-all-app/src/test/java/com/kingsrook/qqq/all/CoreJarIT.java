@@ -16,6 +16,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -99,6 +101,69 @@ class CoreJarIT
             process.waitFor();
          }
       }
+   }
+
+   @ParameterizedTest
+   @ValueSource(strings = {"::1", "::", "0:0:0:0:0:0:0:0", "0.0.0.0"})
+   void packagedCatalogUsesConfiguredListener(String bindHost) throws Exception
+   {
+      String clientHost = bindHost.contains(":") ? "::1" : "127.0.0.1";
+      int port;
+      try(ServerSocket socket = new ServerSocket(0, 50, java.net.InetAddress.getByName(clientHost)))
+      {
+         port = socket.getLocalPort();
+      }
+      URI base = new URI("http", null, clientHost, port, "/", null, null);
+      Path log = dataDirectory.resolve("bound-app.log");
+      ProcessBuilder builder = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+         "-jar", System.getProperty("qqqAllJar"));
+      builder.environment().put("QQQ_ALL_PROFILE", "core");
+      builder.environment().put("QQQ_ALL_BIND_HOST", bindHost);
+      builder.environment().put("QQQ_ALL_PORT", Integer.toString(port));
+      builder.environment().put("QQQ_ALL_DATA_DIR", dataDirectory.resolve("bound-data").toString());
+      builder.redirectErrorStream(true).redirectOutput(log.toFile());
+      Process process = builder.start();
+      try(HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build())
+      {
+         assertEquals(200, awaitHealth(client, base.resolve("health"), process, log).statusCode());
+         var direct = client.send(HttpRequest.newBuilder(base.resolve("demo/catalog"))
+            .timeout(Duration.ofSeconds(10)).build(), HttpResponse.BodyHandlers.ofString());
+         assertEquals(200, direct.statusCode(), "Configured listener must serve its catalog before testing the backend");
+         assertEquals(2, new org.json.JSONArray(direct.body()).length());
+
+         var all = catalogQuery(client, base, "{}");
+         assertEquals(java.util.List.of(101, 102, 103), all.toList().stream()
+            .map(row -> ((java.util.Map<?, ?>) ((java.util.Map<?, ?>) row).get("values")).get("id")).toList());
+         for(int skip = 0; skip < 3; skip++)
+         {
+            var page = catalogQuery(client, base, "{\"filter\":{\"skip\":" + skip + ",\"limit\":1}}");
+            assertEquals(1, page.length());
+            assertEquals(java.util.List.of(101, 102, 103).get(skip), page.getJSONObject(0).getJSONObject("values").getInt("id"));
+         }
+         assertEquals(0, catalogQuery(client, base, "{\"filter\":{\"skip\":3,\"limit\":1}}").length());
+         var get = client.send(HttpRequest.newBuilder(base.resolve("data/apiCatalog/103"))
+            .timeout(Duration.ofSeconds(10)).build(), HttpResponse.BodyHandlers.ofString());
+         assertEquals(200, get.statusCode(), get.body());
+         assertEquals("Shipping Box", new org.json.JSONObject(get.body()).getJSONObject("values").getString("name"));
+      }
+      finally
+      {
+         process.destroy();
+         if(!process.waitFor(5, TimeUnit.SECONDS))
+         {
+            process.destroyForcibly();
+            assertTrue(process.waitFor(5, TimeUnit.SECONDS), "Owned packaged process must stop");
+         }
+      }
+   }
+
+   private static org.json.JSONArray catalogQuery(HttpClient client, URI base, String body) throws Exception
+   {
+      var response = client.send(HttpRequest.newBuilder(base.resolve("qqq/v1/table/apiCatalog/query"))
+         .timeout(Duration.ofSeconds(10)).header("Content-Type", "application/json")
+         .POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
+      assertEquals(200, response.statusCode(), response.body());
+      return new org.json.JSONObject(response.body()).getJSONArray("records");
    }
 
    private static HttpResponse<String> awaitHealth(HttpClient client, URI uri, Process process, Path log) throws Exception

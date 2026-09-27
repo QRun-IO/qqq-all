@@ -67,7 +67,7 @@ final class FullProfileApplication extends AbstractQQQApplication
    @Override
    public QInstance defineQInstance() throws QException
    {
-      QInstance instance = new QqqAllApplication(dataDirectory, settings.get("ARTEMIS_URL"), false, settings.port("PORT", "8080")).defineQInstance();
+      QInstance instance = new QqqAllApplication(dataDirectory, settings.get("ARTEMIS_URL"), false, settings.port("PORT", "8080"), settings.get("BIND_HOST")).defineQInstance();
       addBackends(instance);
       addTables(instance);
       addAuthentication(instance);

@@ -6,7 +6,13 @@
  */
 package com.kingsrook.qqq.all;
 
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.UnknownHostException;
 import java.util.List;
+import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.model.metadata.QBackendMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
@@ -33,10 +39,10 @@ final class DemoRuntimeFeatures
    {
    }
 
-   static void add(QInstance instance, int port)
+   static void add(QInstance instance, int port, String bindHost) throws QException
    {
       instance.addBackend(new APIBackendMetaData().withName("demoApi")
-         .withBaseUrl("http://127.0.0.1:" + port + "/demo")
+         .withBaseUrl(catalogBaseUrl(bindHost, port))
          .withAuthorizationType(AuthorizationType.NONE).withContentType("application/json")
          .withActionUtil(new QCodeReference(DemoCatalogApi.class)));
       instance.addTable(new QTableMetaData().withName("apiCatalog").withLabel("API Catalog")
@@ -65,4 +71,20 @@ final class DemoRuntimeFeatures
                new QFieldMetaData("totalCents", QFieldType.INTEGER))))));
       QJavalinMetaData.ofOrWithNew(instance).withAdditionalRouteProviderReference(new QCodeReference(DemoCatalogRoutes.class));
    }
+
+   private static String catalogBaseUrl(String bindHost, int port) throws QException
+   {
+      try
+      {
+         InetAddress address = InetAddress.getByName(bindHost);
+         String host = address.isAnyLocalAddress()
+            ? (address instanceof Inet6Address ? "::1" : "127.0.0.1") : bindHost;
+         return new URI("http", null, host, port, "/demo", null, null).toASCIIString();
+      }
+      catch(UnknownHostException | URISyntaxException e)
+      {
+         throw new QException("Could not derive demo catalog URL from HTTP bind host", e);
+      }
+   }
+
 }

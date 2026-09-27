@@ -68,6 +68,10 @@ API key, script editor, or user-supplied code is needed.
 | `calculateOrderTotal` | Executes fixed JavaScript through `ExecuteCodeAction`: quantity × unit price in cents → `totalCents`. It changes no records. | Admin only. |
 | `demoNote` | Memory-backed table, seeded with `Transient demo note` on every start and cleared on shutdown. | Admin can edit; Demo/Viewer can read. |
 
+The internal catalog URL follows `QQQ_ALL_BIND_HOST` and the configured HTTP port.
+IPv4/IPv6 wildcard listeners use their corresponding loopback address; literal
+IPv6 hosts are bracketed correctly in the URL.
+
 The catalog endpoint exposes **only synthetic public demo data**. It is not an
 outbound proxy and does not forward session credentials. The adapter supports
 ascending ID order, limit/skip pagination, and one exact ID filter; unsupported
