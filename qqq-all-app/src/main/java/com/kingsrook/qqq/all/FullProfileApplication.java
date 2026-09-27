@@ -34,6 +34,7 @@ import com.kingsrook.qqq.backend.module.filesystem.sftp.model.metadata.SFTPTable
 import com.kingsrook.qqq.backend.module.mongodb.model.metadata.MongoDBBackendMetaData;
 import com.kingsrook.qqq.backend.module.mongodb.model.metadata.MongoDBTableBackendDetails;
 import com.kingsrook.qqq.backend.module.rdbms.model.metadata.RDBMSBackendMetaData;
+import com.kingsrook.qqq.backend.module.postgres.model.metadata.PostgreSQLBackendMetaData;
 import com.kingsrook.qqq.backend.module.rdbms.model.metadata.RDBMSTableBackendDetails;
 import com.kingsrook.qqq.esb.model.EsbDestinationType;
 import com.kingsrook.qqq.esb.model.EsbInstanceMetaData;
@@ -66,7 +67,7 @@ final class FullProfileApplication extends AbstractQQQApplication
    @Override
    public QInstance defineQInstance() throws QException
    {
-      QInstance instance = new QqqAllApplication(dataDirectory, settings.get("ARTEMIS_URL"), false).defineQInstance();
+      QInstance instance = new QqqAllApplication(dataDirectory, settings.get("ARTEMIS_URL"), false, settings.port("PORT", "8080")).defineQInstance();
       addBackends(instance);
       addTables(instance);
       addAuthentication(instance);
@@ -111,13 +112,9 @@ final class FullProfileApplication extends AbstractQQQApplication
 
    private void addBackends(QInstance instance)
    {
-      instance.addBackend(new RDBMSBackendMetaData().withName("postgres").withVendor("postgres")
+      instance.addBackend(new PostgreSQLBackendMetaData().withName("postgres")
          .withHostName(settings.get("POSTGRES_HOST")).withPort(settings.port("POSTGRES_PORT", "5432"))
          .withDatabaseName(settings.get("POSTGRES_DATABASE"))
-         .withJdbcUrl("jdbc:postgresql://" + settings.get("POSTGRES_HOST") + ":"
-            + settings.port("POSTGRES_PORT", "5432") + "/" + settings.get("POSTGRES_DATABASE"))
-         .withJdbcDriverClassName("org.postgresql.Driver")
-         .withActionStrategyCodeReference(new QCodeReference(PostgresActionStrategy.class))
          .withUsername(settings.get("POSTGRES_USER")).withPassword(settings.get("POSTGRES_PASSWORD")));
       instance.addBackend(new RDBMSBackendMetaData().withName("mysql").withVendor("mysql")
          .withHostName(settings.get("MYSQL_HOST")).withPort(settings.port("MYSQL_PORT", "3306"))
