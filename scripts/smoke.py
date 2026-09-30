@@ -81,7 +81,7 @@ class SmokeClient:
         self.cookies = http.cookiejar.CookieJar()
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.cookies))
 
-    def request(self, path, body=None, method=None):
+    def request(self, path, body=None, method=None, expected_status=200):
         data = None if body is None else json.dumps(body).encode()
         headers = {"Content-Type": "application/json"} if data is not None else {}
         if self.session_id:
@@ -92,12 +92,16 @@ class SmokeClient:
         )
         try:
             with self.opener.open(request, timeout=5) as response:
-                if response.status != 200:
+                if response.status != expected_status:
                     raise AssertionError(f"{path}: HTTP {response.status}")
                 return response.read()
         except urllib.error.HTTPError as error:
             status = error.code
-            error.close()
+            try:
+                if status == expected_status:
+                    return error.read()
+            finally:
+                error.close()
             raise AssertionError(f"{path}: HTTP {status}") from None
 
     def json(self, path, body=None):
@@ -197,9 +201,31 @@ def check_artemis_round_trip(client, timeout):
     return process_uuid
 
 
+def check_runtime_features(client, can_calculate=True):
+    records = client.records("apiCatalog")
+    if [record.get("values", {}).get("id") for record in records] != [101, 102, 103]:
+        raise AssertionError("API catalog did not traverse all pages")
+    record = client.json("/data/apiCatalog/103")
+    if record.get("values", {}).get("name") != "Shipping Box":
+        raise AssertionError("API catalog get returned incorrect record")
+    client.require_record("demoNote", "text", "Transient demo note")
+    path = "/processes/calculateOrderTotal/run?quantity=3&unitPriceCents=1250"
+    if can_calculate:
+        result = client.json(path, {})
+        if result.get("values", {}).get("totalCents") != 3750:
+            raise AssertionError("JavaScript calculation returned incorrect total")
+    else:
+        client.request(path, {}, expected_status=403)
+        client.request("/data/demoNote/1", {"text": "forbidden"}, method="PATCH", expected_status=403)
+    client.request("/data/apiCatalog/", {"id": 999, "name": "forbidden"}, expected_status=403)
+    print("API catalog, transient memory, JavaScript permissions: OK")
+
+
 def check_core(client, timeout):
     check_health_and_dashboard(client, timeout)
     check_tables(client, CORE_TABLES)
+    check_runtime_features(client)
+    check_runtime_features(SmokeClient(client.base_url, "dddddddd-dddd-4ddd-8ddd-dddddddddddd"), False)
     check_artemis_round_trip(client, timeout)
 
 
@@ -312,9 +338,11 @@ def check_full(base_url, keycloak_url, query_index, timeout):
     check_health_and_dashboard(viewer, timeout)
     oidc_login(viewer, keycloak_url, "demo-user", os.environ["DEMO_USER_PASSWORD"])
     viewer.require_record("customer", "name", "Ada Lovelace")
+    check_runtime_features(viewer, False)
     admin = SmokeClient(base_url)
     oidc_login(admin, keycloak_url, "demo-admin", os.environ["DEMO_ADMIN_PASSWORD"])
     check_tables(admin, FULL_TABLES, require_seed=False)
+    check_runtime_features(admin)
     check_quick_search(admin, query_index, os.environ.get("QQQ_ALL_OPENSEARCH_INDEX", "qqq-all-customers"), timeout)
     process_uuid = check_artemis_round_trip(admin, timeout)
     check_rabbitmq(admin, timeout, process_uuid)

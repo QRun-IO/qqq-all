@@ -30,7 +30,10 @@
 
    <dependencies>
       <dependency><groupId>com.kingsrook.qqq</groupId><artifactId>qqq-backend-core</artifactId></dependency>
+      <dependency><groupId>com.kingsrook.qqq</groupId><artifactId>qqq-backend-module-api</artifactId></dependency>
+      <dependency><groupId>com.kingsrook.qqq</groupId><artifactId>qqq-language-support-javascript</artifactId></dependency>
       <dependency><groupId>com.kingsrook.qqq</groupId><artifactId>qqq-backend-module-rdbms</artifactId></dependency>
+      <dependency><groupId>com.kingsrook.qqq</groupId><artifactId>qqq-backend-module-postgres</artifactId></dependency>
       <dependency><groupId>com.kingsrook.qqq</groupId><artifactId>qqq-backend-module-mongodb</artifactId></dependency>
       <dependency><groupId>com.kingsrook.qqq</groupId><artifactId>qqq-backend-module-sqlite</artifactId></dependency>
       <dependency><groupId>com.kingsrook.qqq</groupId><artifactId>qqq-backend-module-filesystem</artifactId></dependency>

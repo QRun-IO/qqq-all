@@ -53,6 +53,7 @@ public class DemoUsers implements QAuthenticationModuleCustomizerInterface
    @Override
    public void customizeSession(QInstance instance, QSession session, Map<String, Object> context)
    {
+      session.withPermissions("apiCatalog.read", "demoNote.read");
       Boolean admin = ADMIN_SESSION.equals(session.getUuid());
       String name = admin ? "Admin" : "Demo User";
       String userId = admin ? "core:admin" : "core:demo";
@@ -76,6 +77,7 @@ public class DemoUsers implements QAuthenticationModuleCustomizerInterface
       }
       if(admin)
       {
+         session.withPermissions("calculateOrderTotal.hasAccess", "demoNote.insert", "demoNote.edit", "demoNote.delete");
          session.withPermissions("esbView.hasAccess", "esbOperate.hasAccess", "esbDelete.hasAccess");
          for(String processName : WEBHOOK_PROCESSES)
          {

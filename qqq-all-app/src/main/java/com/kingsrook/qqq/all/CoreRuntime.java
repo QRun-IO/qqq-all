@@ -45,7 +45,7 @@ final class CoreRuntime implements AutoCloseable
       Path brokerDirectory = dataDirectory.resolve("artemis").toAbsolutePath();
       String brokerUrl = "tcp://127.0.0.1:" + brokerPort;
       DemoOrderWebhookReceiver.clear();
-      DemoQBitData.ensureSchema(dataDirectory, new QqqAllApplication(dataDirectory, brokerUrl).defineQInstance(), port);
+      DemoQBitData.ensureSchema(dataDirectory, new QqqAllApplication(dataDirectory, brokerUrl, true, port, bindHost).defineQInstance(), port);
       Configuration configuration = new ConfigurationImpl()
          .setPersistenceEnabled(false).setSecurityEnabled(false).setJMXManagementEnabled(false)
          .setBindingsDirectory(brokerDirectory.resolve("bindings").toString())
@@ -58,7 +58,7 @@ final class CoreRuntime implements AutoCloseable
       try
       {
          QApplicationLauncher launcher = QApplicationLauncher.run(
-            new QqqAllApplication(dataDirectory, brokerUrl),
+            new QqqAllApplication(dataDirectory, brokerUrl, true, port, bindHost),
             new QApplicationLauncherConfig().withRegisterShutdownHook(false)
                .withServerCustomizer(server -> server.withPort(port)
                   .withJavalinConfigCustomizer(config -> config.jetty.host = bindHost)));

@@ -45,6 +45,7 @@ class FullProfileTest
       new QInstanceValidator().validate(instance);
 
       RDBMSBackendMetaData postgres = (RDBMSBackendMetaData) instance.getBackend("postgres");
+      assertEquals("com.kingsrook.qqq.backend.module.postgres.model.metadata.PostgreSQLBackendMetaData", postgres.getClass().getName());
       assertEquals("postgres.example.test", postgres.getHostName());
       assertEquals("jdbc:postgresql://postgres.example.test:5432/qqq", ConnectionManager.getJdbcUrl(postgres));
       assertEquals("org.postgresql.Driver", ConnectionManager.getJdbcDriverClassName(postgres));

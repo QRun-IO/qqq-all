@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest import mock
 
-from smoke import SmokeClient, check_artemis_round_trip, check_core, check_rabbitmq, check_tables, CORE_TABLES
+from smoke import SmokeClient, check_artemis_round_trip, check_core, check_rabbitmq, check_tables, check_runtime_features, CORE_TABLES
 import run_full_smoke
 from run_full_smoke import ROOT
 
@@ -42,6 +42,8 @@ class DemoHandler(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
+        if self.path == "/data/apiCatalog/103":
+            return self.send_json({"values": {"id": 103, "name": "Shipping Box"}})
         if self.path == "/health":
             return self.send_json({"status": "UP"})
         if self.path == "/":
@@ -62,6 +64,12 @@ class DemoHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        if self.path == "/data/apiCatalog/":
+            return self.send_error(403)
+        if self.path.startswith("/processes/calculateOrderTotal/run"):
+            if "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" not in self.headers.get("Cookie", ""):
+                return self.send_error(403)
+            return self.send_json({"values": {"totalCents": 3750}})
         if self.path == "/data/order/":
             assert body["orderNo"].startswith("SMOKE-")
             type(self).orders += 1
@@ -70,6 +78,8 @@ class DemoHandler(BaseHTTPRequestHandler):
             return self.send_json({"records": [{"values": {"id": 100 + self.orders}}]})
         if self.path.startswith("/qqq/v1/table/") and self.path.endswith("/query"):
             table = self.path.split("/")[4]
+            if table == "apiCatalog":
+                return self.send_json({"records": [{"values": {"id": i}} for i in (101, 102, 103)]})
             if table == "processTrace":
                 records = [{"recordLabel": self.trace_label,
                             "values": {"id": i, "processUUID": f"trace-{i}",
@@ -77,6 +87,7 @@ class DemoHandler(BaseHTTPRequestHandler):
                            for i in range(self.orders)]
             else:
                 values = {
+                    "demoNote": {"id": 1, "text": "Transient demo note"},
                     "customer": {"id": 1, "name": "Ada Lovelace"},
                     "order": {"id": 1, "orderNo": "ORD-1001"},
                     "orderLine": {"id": 1, "quantity": 2},
@@ -87,6 +98,11 @@ class DemoHandler(BaseHTTPRequestHandler):
                     records.append({"values": {"id": 100 + self.orders,
                                                 "orderNo": self.inserted_marker}})
             return self.send_json({"records": records})
+        self.send_error(404)
+
+    def do_PATCH(self):
+        if self.path == "/data/demoNote/1":
+            return self.send_error(403)
         self.send_error(404)
 
     def send_json(self, value):
@@ -103,6 +119,19 @@ class SmokeTest(unittest.TestCase):
         DemoHandler.orders = 0
         DemoHandler.trace_order_id = None
         DemoHandler.inserted_marker = None
+
+    def test_catalog_missing_final_page_fails(self):
+        client = mock.Mock()
+        client.records.return_value = [{"values": {"id": value}} for value in (101, 102)]
+        with self.assertRaisesRegex(AssertionError, "all pages"):
+            check_runtime_features(client)
+
+    def test_wrong_javascript_result_fails(self):
+        client = mock.Mock()
+        client.records.return_value = [{"values": {"id": value}} for value in (101, 102, 103)]
+        client.json.side_effect = [{"values": {"name": "Shipping Box"}}, {"values": {"totalCents": 3749}}]
+        with self.assertRaisesRegex(AssertionError, "incorrect total"):
+            check_runtime_features(client)
 
     def test_core_runner_fails_promptly_when_jar_exits(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -294,6 +323,7 @@ class SmokeTest(unittest.TestCase):
         thread.start()
         try:
             client = SmokeClient(f"http://127.0.0.1:{server.server_port}")
+            client.session_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
             check_core(client, timeout=2)
         finally:
             server.shutdown()

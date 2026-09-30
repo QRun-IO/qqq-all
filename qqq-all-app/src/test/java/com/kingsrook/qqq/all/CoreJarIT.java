@@ -16,6 +16,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -39,28 +41,56 @@ class CoreJarIT
       Path log = dataDirectory.resolve("app.log");
       ProcessBuilder builder = new ProcessBuilder(
          Path.of(System.getProperty("java.home"), "bin", "java").toString(), "-jar", jar.toString());
+      builder.environment().put("QQQ_ALL_PROFILE", "core");
       builder.environment().put("QQQ_ALL_PORT", port.toString());
       builder.environment().put("QQQ_ALL_DATA_DIR", dataDirectory.resolve("data").toString());
       builder.redirectErrorStream(true).redirectOutput(log.toFile());
       Process process = builder.start();
       try
       {
-         HttpClient client = HttpClient.newHttpClient();
-         URI healthUri = URI.create("http://127.0.0.1:" + port + "/health");
-         HttpResponse<String> health = awaitHealth(client, healthUri, process, log);
-         assertEquals(200, health.statusCode());
-         assertTrue(health.body().contains("\"UP\""));
-         assertTrue(Files.readString(log).contains("{127.0.0.1:" + port + "}"),
-            "Core profile must bind only to loopback");
+         try(HttpClient client = HttpClient.newHttpClient())
+         {
+            URI healthUri = URI.create("http://127.0.0.1:" + port + "/health");
+            HttpResponse<String> health = awaitHealth(client, healthUri, process, log);
+            assertEquals(200, health.statusCode());
+            assertTrue(health.body().contains("\"UP\""));
+            assertTrue(Files.readString(log).contains("{127.0.0.1:" + port + "}"),
+               "Core profile must bind only to loopback");
 
-         HttpRequest query = HttpRequest.newBuilder()
-            .uri(URI.create("http://127.0.0.1:" + port + "/qqq/v1/table/customer/query"))
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString("{}"))
-            .build();
-         HttpResponse<String> customers = client.send(query, HttpResponse.BodyHandlers.ofString());
-         assertEquals(200, customers.statusCode(), customers.body());
-         assertTrue(customers.body().contains("Ada Lovelace"));
+            HttpRequest query = HttpRequest.newBuilder()
+               .uri(URI.create("http://127.0.0.1:" + port + "/qqq/v1/table/customer/query"))
+               .header("Content-Type", "application/json")
+               .POST(HttpRequest.BodyPublishers.ofString("{}"))
+               .build();
+            HttpResponse<String> customers = client.send(query, HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, customers.statusCode(), customers.body());
+            assertTrue(customers.body().contains("Ada Lovelace"));
+            for(String table : java.util.List.of("apiCatalog", "demoNote"))
+            {
+               var result = client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+                  + "/qqq/v1/table/" + table + "/query")).header("Content-Type", "application/json")
+                  .POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString());
+               assertEquals(200, result.statusCode(), result.body());
+               var records = new org.json.JSONObject(result.body()).getJSONArray("records");
+               assertEquals(table.equals("apiCatalog") ? 3 : 1, records.length());
+            }
+            var calculation = client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port
+               + "/processes/calculateOrderTotal/run?quantity=3&unitPriceCents=1250"))
+               .header("Cookie", "sessionId=" + DemoUsers.ADMIN_SESSION).header("Content-Type", "application/json")
+               .POST(HttpRequest.BodyPublishers.ofString("{}")).build(), HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, calculation.statusCode(), calculation.body());
+            assertEquals(3750, new org.json.JSONObject(calculation.body()).getJSONObject("values").getInt("totalCents"));
+         }
+         try(var packaged = new java.util.jar.JarFile(jar.toFile()))
+         {
+            var service = packaged.getJarEntry("META-INF/services/javax.script.ScriptEngineFactory");
+            org.junit.jupiter.api.Assertions.assertNotNull(service);
+            try(var input = packaged.getInputStream(service))
+            {
+               assertTrue(new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)
+                  .contains("org.openjdk.nashorn.api.scripting.NashornScriptEngineFactory"));
+            }
+         }
       }
       finally
       {
@@ -71,6 +101,69 @@ class CoreJarIT
             process.waitFor();
          }
       }
+   }
+
+   @ParameterizedTest
+   @ValueSource(strings = {"::1", "::", "0:0:0:0:0:0:0:0", "0.0.0.0"})
+   void packagedCatalogUsesConfiguredListener(String bindHost) throws Exception
+   {
+      String clientHost = bindHost.contains(":") ? "::1" : "127.0.0.1";
+      int port;
+      try(ServerSocket socket = new ServerSocket(0, 50, java.net.InetAddress.getByName(clientHost)))
+      {
+         port = socket.getLocalPort();
+      }
+      URI base = new URI("http", null, clientHost, port, "/", null, null);
+      Path log = dataDirectory.resolve("bound-app.log");
+      ProcessBuilder builder = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+         "-jar", System.getProperty("qqqAllJar"));
+      builder.environment().put("QQQ_ALL_PROFILE", "core");
+      builder.environment().put("QQQ_ALL_BIND_HOST", bindHost);
+      builder.environment().put("QQQ_ALL_PORT", Integer.toString(port));
+      builder.environment().put("QQQ_ALL_DATA_DIR", dataDirectory.resolve("bound-data").toString());
+      builder.redirectErrorStream(true).redirectOutput(log.toFile());
+      Process process = builder.start();
+      try(HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build())
+      {
+         assertEquals(200, awaitHealth(client, base.resolve("health"), process, log).statusCode());
+         var direct = client.send(HttpRequest.newBuilder(base.resolve("demo/catalog"))
+            .timeout(Duration.ofSeconds(10)).build(), HttpResponse.BodyHandlers.ofString());
+         assertEquals(200, direct.statusCode(), "Configured listener must serve its catalog before testing the backend");
+         assertEquals(2, new org.json.JSONArray(direct.body()).length());
+
+         var all = catalogQuery(client, base, "{}");
+         assertEquals(java.util.List.of(101, 102, 103), all.toList().stream()
+            .map(row -> ((java.util.Map<?, ?>) ((java.util.Map<?, ?>) row).get("values")).get("id")).toList());
+         for(int skip = 0; skip < 3; skip++)
+         {
+            var page = catalogQuery(client, base, "{\"filter\":{\"skip\":" + skip + ",\"limit\":1}}");
+            assertEquals(1, page.length());
+            assertEquals(java.util.List.of(101, 102, 103).get(skip), page.getJSONObject(0).getJSONObject("values").getInt("id"));
+         }
+         assertEquals(0, catalogQuery(client, base, "{\"filter\":{\"skip\":3,\"limit\":1}}").length());
+         var get = client.send(HttpRequest.newBuilder(base.resolve("data/apiCatalog/103"))
+            .timeout(Duration.ofSeconds(10)).build(), HttpResponse.BodyHandlers.ofString());
+         assertEquals(200, get.statusCode(), get.body());
+         assertEquals("Shipping Box", new org.json.JSONObject(get.body()).getJSONObject("values").getString("name"));
+      }
+      finally
+      {
+         process.destroy();
+         if(!process.waitFor(5, TimeUnit.SECONDS))
+         {
+            process.destroyForcibly();
+            assertTrue(process.waitFor(5, TimeUnit.SECONDS), "Owned packaged process must stop");
+         }
+      }
+   }
+
+   private static org.json.JSONArray catalogQuery(HttpClient client, URI base, String body) throws Exception
+   {
+      var response = client.send(HttpRequest.newBuilder(base.resolve("qqq/v1/table/apiCatalog/query"))
+         .timeout(Duration.ofSeconds(10)).header("Content-Type", "application/json")
+         .POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString());
+      assertEquals(200, response.statusCode(), response.body());
+      return new org.json.JSONObject(response.body()).getJSONArray("records");
    }
 
    private static HttpResponse<String> awaitHealth(HttpClient client, URI uri, Process process, Path log) throws Exception

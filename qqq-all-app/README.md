@@ -55,3 +55,64 @@ QQQ_ALL_COMPOSE_BROKERS=true mvn -pl qqq-all-app -am -Dtest=FullProfileBrokerInt
 ```
 
 The test uses the loopback management ports to read and pause/resume the Artemis subscription queue, then creates, reads, purges, and deletes a temporary RabbitMQ queue. For a customized `.env`, source that file instead. It is skipped during ordinary `mvn verify`.
+
+## Local runtime demonstrations (#21)
+
+Both profiles include the BOM-managed API backend and JavaScript module. The shaded
+JAR retains Nashorn's `ScriptEngineFactory` service registration. No extra service,
+API key, script editor, or user-supplied code is needed.
+
+| Demo | Behavior | Access |
+| --- | --- | --- |
+| `apiCatalog` | QQQ API-backed table reads three synthetic products from this app's `/demo/catalog` HTTP endpoint; native queries page through the endpoint and get-by-ID uses `/demo/catalog/{id}`. | Admin and Demo/Viewer can read; neither receives write grants. |
+| `calculateOrderTotal` | Executes fixed JavaScript through `ExecuteCodeAction`: quantity × unit price in cents → `totalCents`. It changes no records. | Admin only. |
+| `demoNote` | Memory-backed table, seeded with `Transient demo note` on every start and cleared on shutdown. | Admin can edit; Demo/Viewer can read. |
+
+The internal catalog URL follows `QQQ_ALL_BIND_HOST` and the configured HTTP port.
+IPv4/IPv6 wildcard listeners use their corresponding loopback address; literal
+IPv6 hosts are bracketed correctly in the URL.
+
+The catalog endpoint exposes **only synthetic public demo data**. It is not an
+outbound proxy and does not forward session credentials. The adapter supports
+ascending ID order, limit/skip pagination, and one exact ID filter; unsupported
+filters and sorts fail explicitly. Native get of an absent ID returns no record.
+The endpoint rejects invalid or excessive page sizes (maximum 1000).
+
+With the core JAR running on port 8080, exercise the real QQQ routes:
+
+```sh
+curl -fsS -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:8080/qqq/v1/table/apiCatalog/query
+curl -fsS http://127.0.0.1:8080/data/apiCatalog/103
+curl -fsS -H 'Cookie: sessionId=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' -H 'Content-Type: application/json' -d '{}' 'http://127.0.0.1:8080/processes/calculateOrderTotal/run?quantity=3&unitPriceCents=1250'
+```
+
+The last response contains `values.totalCents: 3750`. Quantity must be an integer
+in 1..1000; unit price must be an integer in 0..1000000 cents. The process does not
+accept code from the caller. This demonstration does not alter stored-script or
+Test-mode behavior.
+
+Memory notes are deliberately **not persisted** with the data directory or a
+Compose volume. Restarting discards edits and restores the seed. Like the existing
+QQQ memory and ESB runtime singletons, this demo assumes one application per JVM.
+The memory lifecycle touches only `demoNote`; it never resets the global store.
+
+Full-profile PostgreSQL now uses QQQ's first-party `PostgreSQLBackendMetaData` and
+strategy, including driver/URL selection, quoted identifiers, default-value
+inserts, generated IDs, null binding, and UTC timestamp handling. Existing qbit
+schema provisioning and compatibility checks remain in place.
+
+Fresh full-profile volumes apply `infra/postgres/05-runtime-demo-permissions.sql`.
+For an existing volume, apply the idempotent grants and then sign in again:
+
+```sh
+COMPOSE_PROFILES=full docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < infra/postgres/05-runtime-demo-permissions.sql
+```
+
+`mvn -pl qqq-all-app -am verify` includes native local API, calculation/permission,
+memory restart, and packaged-JAR checks. `scripts/run_core_smoke.py` and
+`scripts/run_full_smoke.py` verify these routes with actual Admin and restricted
+sessions; full smoke also retains the OIDC, qbit, and broker checks. The opt-in
+`PostgresCompatibilityTest` uses `QQQ_ALL_TEST_POSTGRES_PORT` and
+`QQQ_ALL_TEST_POSTGRES_PASSWORD` against a local `qqq` database/user; it creates and
+drops only a uniquely named test table. It is skipped during ordinary verify.
+All eight included qbits, their explicit deferrals, and release gates are unchanged.

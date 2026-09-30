@@ -58,6 +58,8 @@ public final class QqqAllApplication extends AbstractQQQApplication
    private final Path   dataDirectory;
    private final String brokerUrl;
    private final boolean includeDemoQbits;
+   private final int httpPort;
+   private final String bindHost;
 
    public QqqAllApplication(Path dataDirectory, String brokerUrl)
    {
@@ -66,6 +68,18 @@ public final class QqqAllApplication extends AbstractQQQApplication
 
    QqqAllApplication(Path dataDirectory, String brokerUrl, boolean includeDemoQbits)
    {
+      this(dataDirectory, brokerUrl, includeDemoQbits, 8080);
+   }
+
+   QqqAllApplication(Path dataDirectory, String brokerUrl, boolean includeDemoQbits, int httpPort)
+   {
+      this(dataDirectory, brokerUrl, includeDemoQbits, httpPort, "127.0.0.1");
+   }
+
+   QqqAllApplication(Path dataDirectory, String brokerUrl, boolean includeDemoQbits, int httpPort, String bindHost)
+   {
+      this.bindHost = bindHost;
+      this.httpPort = httpPort;
       this.dataDirectory = dataDirectory;
       this.brokerUrl = brokerUrl;
       this.includeDemoQbits = includeDemoQbits;
@@ -152,6 +166,7 @@ public final class QqqAllApplication extends AbstractQQQApplication
          QJavalinMetaData.ofOrWithNew(instance)
             .withAdditionalRouteProviderReference(new QCodeReference(DemoOrderWebhookReceiver.class));
       }
+      DemoRuntimeFeatures.add(instance, httpPort, bindHost);
       return instance;
    }
 
