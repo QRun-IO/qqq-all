@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Exercises the assembled core application, including its real broker and backends. */
@@ -59,6 +60,19 @@ class CoreApplicationTest
             HttpResponse.BodyHandlers.ofString());
          assertEquals(200, health.statusCode());
          assertTrue(health.body().contains("\"UP\""));
+
+         assertNotNull(runtime.getLauncher().getQInstance().getApp("esb"));
+         HttpResponse<String> adminEsb = client.send(HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/qqq/v1/esb/overview"))
+            .header("Cookie", "sessionId=" + DemoUsers.ADMIN_SESSION).build(),
+            HttpResponse.BodyHandlers.ofString());
+         assertEquals(200, adminEsb.statusCode(), adminEsb.body());
+         assertTrue(adminEsb.body().contains("\"destinations\""));
+         HttpResponse<String> viewerEsb = client.send(HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/qqq/v1/esb/overview"))
+            .header("Cookie", "sessionId=" + DemoUsers.DEMO_SESSION).build(),
+            HttpResponse.BodyHandlers.ofString());
+         assertEquals(403, viewerEsb.statusCode());
 
          HttpResponse<String> dashboard = client.send(HttpRequest.newBuilder()
             .uri(URI.create("http://localhost:" + port + "/")).build(),
@@ -108,11 +122,13 @@ class CoreApplicationTest
 
             waitFor(() -> QEsbRuntime.getInstance().getRunner("syncOrder.orderEvents") != null
                && QEsbRuntime.getInstance().getRunner("syncOrder.orderEvents").getState() == EsbTriggerState.RUNNING);
-            new InsertAction().execute(new InsertInput("order").withRecords(List.of(
+            Integer insertedOrderId = new InsertAction().execute(new InsertInput("order").withRecords(List.of(
                new QRecord().withValue("orderNo", "ORD-1002")
-                  .withValue("customerId", 2).withValue("status", "NEW"))));
+                  .withValue("customerId", 2).withValue("status", "NEW"))))
+               .getRecords().getFirst().getValueInteger("id");
             waitFor(() -> QqqAllApplication.SyncOrderStep.getRunCount() > 0);
-            waitFor(() -> !new QueryAction().execute(new QueryInput("processTrace")).getRecords().isEmpty());
+            waitFor(() -> new QueryAction().execute(new QueryInput("processTrace")).getRecords().stream()
+               .anyMatch(trace -> insertedOrderId.equals(trace.getValueInteger("keyRecordId"))));
             waitFor(() -> !new QueryAction().execute(new QueryInput("webhookEvent")).getRecords().isEmpty());
 
             HttpResponse<String> receipts = client.send(HttpRequest.newBuilder()

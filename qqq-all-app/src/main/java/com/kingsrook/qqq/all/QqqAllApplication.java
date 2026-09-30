@@ -14,6 +14,7 @@ import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.instances.AbstractQQQApplication;
 import com.kingsrook.qqq.backend.core.model.actions.processes.RunBackendStepInput;
 import com.kingsrook.qqq.backend.core.model.actions.processes.RunBackendStepOutput;
+import com.kingsrook.qqq.backend.core.model.metadata.MetaDataProducerHelper;
 import com.kingsrook.qqq.backend.core.model.metadata.QAuthenticationType;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 import com.kingsrook.qqq.backend.core.model.metadata.authentication.AuthScope;
@@ -24,6 +25,7 @@ import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
 import com.kingsrook.qqq.backend.core.model.metadata.processes.QBackendStepMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.processes.QProcessMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.tables.QTableMetaData;
+import com.kingsrook.qqq.backend.core.processes.tracing.ProcessTracerKeyRecordMessage;
 import com.kingsrook.qqq.backend.module.filesystem.base.model.metadata.Cardinality;
 import com.kingsrook.qqq.backend.module.filesystem.base.model.metadata.RecordFormat;
 import com.kingsrook.qqq.backend.module.filesystem.local.model.metadata.FilesystemBackendMetaData;
@@ -31,6 +33,9 @@ import com.kingsrook.qqq.backend.module.filesystem.local.model.metadata.Filesyst
 import com.kingsrook.qqq.backend.module.rdbms.model.metadata.RDBMSBackendMetaData;
 import com.kingsrook.qqq.backend.module.rdbms.model.metadata.RDBMSTableBackendDetails;
 import com.kingsrook.qqq.backend.module.sqlite.model.metadata.SQLiteBackendMetaData;
+import com.kingsrook.qqq.esb.envelope.EsbEvent;
+import com.kingsrook.qqq.esb.api.EsbJavalinMetaDataProducer;
+import com.kingsrook.qqq.esb.metadata.EsbAppMetaDataProducer;
 import com.kingsrook.qqq.esb.model.EsbDestinationType;
 import com.kingsrook.qqq.esb.model.EsbInstanceMetaData;
 import com.kingsrook.qqq.esb.model.EsbProcessMetaData;
@@ -41,6 +46,7 @@ import com.kingsrook.qqq.esb.model.EsbTablePublication;
 import com.kingsrook.qqq.esb.model.EsbTrigger;
 import com.kingsrook.qqq.esb.model.QEsbDestinationMetaData;
 import com.kingsrook.qqq.esb.model.QEsbProviderMetaData;
+import com.kingsrook.qqq.esb.runtime.EsbTriggerHandler;
 import com.kingsrook.qqq.middleware.health.JavalinHealthRouteProvider;
 import com.kingsrook.qqq.middleware.health.indicators.MemoryHealthIndicator;
 import com.kingsrook.qqq.middleware.health.model.metadata.HealthCheckMetaData;
@@ -52,6 +58,8 @@ public final class QqqAllApplication extends AbstractQQQApplication
    private final Path   dataDirectory;
    private final String brokerUrl;
    private final boolean includeDemoQbits;
+   private final int httpPort;
+   private final String bindHost;
 
    public QqqAllApplication(Path dataDirectory, String brokerUrl)
    {
@@ -60,6 +68,18 @@ public final class QqqAllApplication extends AbstractQQQApplication
 
    QqqAllApplication(Path dataDirectory, String brokerUrl, boolean includeDemoQbits)
    {
+      this(dataDirectory, brokerUrl, includeDemoQbits, 8080);
+   }
+
+   QqqAllApplication(Path dataDirectory, String brokerUrl, boolean includeDemoQbits, int httpPort)
+   {
+      this(dataDirectory, brokerUrl, includeDemoQbits, httpPort, "127.0.0.1");
+   }
+
+   QqqAllApplication(Path dataDirectory, String brokerUrl, boolean includeDemoQbits, int httpPort, String bindHost)
+   {
+      this.bindHost = bindHost;
+      this.httpPort = httpPort;
       this.dataDirectory = dataDirectory;
       this.brokerUrl = brokerUrl;
       this.includeDemoQbits = includeDemoQbits;
@@ -132,6 +152,8 @@ public final class QqqAllApplication extends AbstractQQQApplication
             .withType(EsbDestinationType.TOPIC).withProviderName("artemis")
             .withDestinationName("qqq.all.orderEvents"));
       instance.withRuntimeService(new QCodeReference(CoreEsbRuntimeService.class));
+      MetaDataProducerHelper.processAllMetaDataProducersInPackage(instance, EsbAppMetaDataProducer.class.getPackageName());
+      new EsbJavalinMetaDataProducer().produce(instance);
 
       instance.withSupplementalMetaData(new HealthCheckMetaData().withEnabled(true)
          .withEndpointPath("/health").withIndicators(List.of(new MemoryHealthIndicator().withThreshold(99))));
@@ -144,6 +166,7 @@ public final class QqqAllApplication extends AbstractQQQApplication
          QJavalinMetaData.ofOrWithNew(instance)
             .withAdditionalRouteProviderReference(new QCodeReference(DemoOrderWebhookReceiver.class));
       }
+      DemoRuntimeFeatures.add(instance, httpPort, bindHost);
       return instance;
    }
 
@@ -155,6 +178,19 @@ public final class QqqAllApplication extends AbstractQQQApplication
       @Override
       public void run(RunBackendStepInput input, RunBackendStepOutput output) throws QException
       {
+         if(input.getValue(EsbTriggerHandler.VALUE_ESB_MESSAGES) instanceof List<?> messages)
+         {
+            for(Object message : messages)
+            {
+               if(message instanceof EsbEvent event
+                  && event.getSource().endsWith("/table/order") && event.getSubject() != null)
+               {
+                  Integer orderId = Integer.valueOf(event.getSubject());
+                  input.getProcessTracer().ifPresent(tracer -> tracer.handleMessage(input,
+                     new ProcessTracerKeyRecordMessage("order", orderId)));
+               }
+            }
+         }
          RUN_COUNT.incrementAndGet();
       }
 
