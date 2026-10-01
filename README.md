@@ -46,3 +46,8 @@ The [4.1.0 release procedure](docs/release.md) describes the separate Maven pare
 ## Contributing and license
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), the [Code of Conduct](CODE_OF_CONDUCT.md), and the [security policy](SECURITY.md). Licensed under Apache-2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+The application JAR includes exact copies of these project documents under
+`META-INF/qqq-all/`, separate from dependency notices. The container also includes
+them at `/app/LICENSE` and `/app/NOTICE`. `PackagedNoticesIT` checks the shaded JAR's
+project documents against the root files during the existing `mvn verify` lifecycle.

@@ -10,6 +10,7 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY --chown=qqq:qqq qqq-all-app/target/qqq-all-app.jar /app/qqq-all.jar
+COPY --chown=qqq:qqq LICENSE NOTICE /app/
 USER 10001:10001
 EXPOSE 8080
 ENV QQQ_ALL_DATA_DIR=/app/data

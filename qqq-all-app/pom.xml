@@ -60,6 +60,20 @@
 
    <build>
       <finalName>qqq-all-app</finalName>
+      <resources>
+         <resource>
+            <directory>src/main/resources</directory>
+         </resource>
+         <resource>
+            <directory>${project.basedir}/..</directory>
+            <targetPath>META-INF/qqq-all</targetPath>
+            <filtering>false</filtering>
+            <includes>
+               <include>LICENSE</include>
+               <include>NOTICE</include>
+            </includes>
+         </resource>
+      </resources>
       <plugins>
          <plugin>
             <groupId>org.apache.maven.plugins</groupId>
@@ -93,6 +107,7 @@
             <configuration>
                <systemPropertyVariables>
                   <qqqAllJar>${project.build.directory}/${project.build.finalName}.jar</qqqAllJar>
+                  <qqqAllRoot>${project.basedir}/..</qqqAllRoot>
                </systemPropertyVariables>
             </configuration>
             <executions>
