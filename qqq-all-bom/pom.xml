@@ -18,6 +18,7 @@
 
    <properties>
       <qqq.version>4.1.0-SNAPSHOT</qqq.version>
+      <qqq-frontend-next.version>1.0.0-RC.8</qqq-frontend-next.version>
 
       <!-- qBits: develop builds on qbit-build-parent 2.0.0; none has a release on that parent yet. -->
       <qbit-quick-search.version>0.2.1-SNAPSHOT</qbit-quick-search.version>
@@ -77,13 +78,20 @@
 
    <dependencyManagement>
       <dependencies>
-         <!-- QQQ modules, qqq-esb, and qqq-frontend-next. -->
+         <!-- QQQ modules and qqq-esb. -->
          <dependency>
             <groupId>com.kingsrook.qqq</groupId>
             <artifactId>qqq-bom-pom</artifactId>
             <version>${qqq.version}</version>
             <type>pom</type>
             <scope>import</scope>
+         </dependency>
+
+         <!-- Keep the accepted dashboard candidate independent of framework snapshots. -->
+         <dependency>
+            <groupId>com.kingsrook.qqq</groupId>
+            <artifactId>qqq-frontend-next</artifactId>
+            <version>${qqq-frontend-next.version}</version>
          </dependency>
 
          <!-- qBits -->
