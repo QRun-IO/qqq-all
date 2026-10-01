@@ -1,6 +1,6 @@
 # 4.1.0 release preparation
 
-This procedure prepares a release; this repository currently remains on `4.1.0-SNAPSHOT`. The [manual release workflow](../.github/workflows/release.yml) only publishes the versioned GHCR image and a GitHub release containing `compose.yaml`. It does **not** deploy Maven artifacts or create a tag. Keep the workflow disabled until the owner has cleared the license/header decision and GHCR visibility.
+This procedure prepares a release; this repository currently remains on `4.1.0-SNAPSHOT`. The [manual release workflow](../.github/workflows/release.yml) only publishes the versioned GHCR image and a GitHub release containing `compose.yaml`. It does **not** deploy Maven artifacts or create a tag. Publication is authorized once the release gates pass. Keep the workflow disabled until Apache-2.0 alignment, public artifact verification and GHCR visibility are complete.
 
 ## Prerequisites and Maven artifacts
 
@@ -12,16 +12,16 @@ This procedure prepares a release; this repository currently remains on `4.1.0-S
    mvn -B -ntp -pl qqq-all-bom -am -Prelease-central deploy
    ```
 
-   The command uploads a deployment for **manual** Central Portal review; it does not auto-publish. Check the staged parent and BOM POM coordinates, signatures, license/SCM metadata, 4.1 QQQ import, and all eight qbit pins. Publish in the Portal only after approval. The profile fails validation while any current snapshot version remains. `mvn deploy` without the profile is not a release path.
+   The command uploads a deployment for **manual** Central Portal review; it does not auto-publish. Check the staged parent and BOM POM coordinates, signatures, license/SCM metadata, 4.1 QQQ import, and all eight qbit pins. Publish in the Portal only after the required reviews and release gates pass; the owner has already authorized this gated publication. The profile fails validation while any current snapshot version remains. `mvn deploy` without the profile is not a release path.
 4. Wait until both release POMs resolve anonymously from Maven Central. The release workflow fetches them from `repo.maven.apache.org` and compares their coordinates and BOM pins with its exact source commit. If either artifact is absent or differs, it stops before image publication.
 
-The owner must resolve the license/header alignment noted in the [plan](plan.md) before enabling release. The existing Apache-2.0 metadata is not itself evidence that every dependency and header is cleared. The owner must also bootstrap the `qqq-all` GHCR package and make it **Public** in package settings; first publication defaults private. The workflow checks public visibility and refuses to push a private release image.
+The owner selected Apache-2.0 for first-party code in [QQQ #923](https://github.com/QRun-IO/qqq/issues/923). Complete its reviewed alignment and verify the published artifacts before enabling release, preserving third-party terms. Existing Apache-2.0 metadata alone does not prove that all first-party headers and artifacts are aligned. The owner must also bootstrap the `qqq-all` GHCR package and make it **Public** in package settings; first publication defaults private. The workflow checks public visibility and refuses to push a private release image.
 
 ## Exact commit and manual dispatch
 
 After the release POMs are public, merge the reviewed version-pin change and the C7 smoke workflow to `develop`. Require a successful **push** run of `Smoke` on the exact intended commit; both `core` and `full` jobs must pass. Review the run's full SHA and run ID in Actions. Create an **annotated** `4.1.0` tag at that exact `develop` commit through the normal signed-tag process. The workflow checks that the local tag is annotated and that the remote tag resolves to the same SHA; it does not verify a tag signature, so the operator must do that separately. Do not move the tag or advance `develop` before dispatch.
 
-Configure a protected `qqq-all-release` GitHub environment with required reviewers and branch restriction to `develop`. After the owner has cleared licensing and the publication preconditions, set environment variables `QQQ_ALL_RELEASE_LICENSE_APPROVED=true` and `QQQ_ALL_RELEASE_ENABLED=true`. Unset them to close the gate. These variables and the environment approval are operational controls, not substitutes for the release review.
+Configure a protected `qqq-all-release` GitHub environment with required reviewers and branch restriction to `develop`. After Apache alignment and the publication preconditions pass, set environment variables `QQQ_ALL_RELEASE_LICENSE_APPROVED=true` and `QQQ_ALL_RELEASE_ENABLED=true`. Unset them to close the gate. These variables and the environment approval are operational controls, not substitutes for the release review.
 
 Dispatch **Release 4.1.0** on `develop` with `release_sha` (the full 40-character commit SHA) and `smoke_run_id` (the successful push run ID). The job requires that checkout, `develop`, the annotated tag, and the smoke run all refer to that SHA. It checks upstream GA, both public Central POMs, public GHCR visibility, and the absence of a `4.1.0` GHCR tag; runs `mvn -B -ntp verify`; then rechecks the live `develop` and remote tag refs before publication. Only then does it build and push `ghcr.io/qrun-io/qqq-all:4.1.0` and create the GitHub `4.1.0` release with `compose.yaml` attached.
 
