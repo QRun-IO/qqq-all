@@ -8,7 +8,7 @@
 
 **Depends on:** ESB epic QRun-IO/qqq#739 and Next-as-default QRun-IO/qqq#649, both in qqq 4.1.
 
-**Licensing:** do not change LICENSE files or source headers in any repo. Header/license alignment (several repos still carry AGPL headers and LICENSE files) is a separate owner decision.
+**Licensing:** the owner selected Apache-2.0 for all first-party code under [QQQ #923](https://github.com/QRun-IO/qqq/issues/923). Complete the reviewed header/license alignment and verify published metadata before release. Preserve third-party licenses and attribution.
 
 ## Global Constraints
 
@@ -17,7 +17,7 @@
 - Maven: never `mvn install` while other agents build; use `-pl … -am verify`.
 - QQQ code style and checkstyle of the target repo. New files in `qqq-all` use the Apache-2.0 header; in other repos copy a neighboring file's header.
 - No secrets in the repo. Demo credentials live only in `compose.yaml` and the Keycloak realm file, are marked demo-only, and are overridable by env.
-- Releases, tags, and Maven Central or GHCR publishing of release versions: ask James first.
+- The owner authorized signed commits, pushes, reviewed merges and publication after the release gates pass. Follow [the release procedure](release.md) and [#10](https://github.com/QRun-IO/qqq-all/issues/10); this authorization does not bypass required reviews or public-artifact checks.
 
 ## Tasks
 
@@ -41,7 +41,7 @@
 
 Each:
 1. If `main` has commits not in `develop`, open a back-merge PR (`main` → `develop`) first. Resolve conflicts keeping develop's features and main's fixes; no force-push.
-2. Parent → `com.kingsrook:qbit-build-parent:2.0.0` (imports `qqq-bom-pom` 4.0.0). Remove child `qqq-bom-pom` imports that shadow the parent. Java 21. Leave LICENSE files and headers as they are.
+2. Parent → `com.kingsrook:qbit-build-parent:2.0.0` (imports `qqq-bom-pom` 4.0.0). Remove child `qqq-bom-pom` imports that shadow the parent. Java 21. Apply the separately reviewed Apache-2.0 alignment under QQQ #923 while preserving third-party terms.
 3. Build and test green on the parent's qqq 4.0.0. Also add an opt-in Maven profile `qqq-snapshot` that imports `qqq-bom-pom:${qqq.snapshot.version}` (default `4.1.0-SNAPSHOT`) ahead of the parent's BOM and adds the Central snapshots repository (`https://central.sonatype.com/repository/maven-snapshots/`); `-Pqqq-snapshot` must also build and test green. (The parent has no qqq-version property to override.) The move to a 4.1 parent happens at 4.1 GA (task C9).
 4. Integration tests that need Docker fail, not skip, when `CI=true`.
 5. Remove explicit qqq module `<version>`s in the child pom so the BOM (or the `qqq-snapshot` profile) controls them — `qbit-workflows` pins them explicitly on develop.
@@ -95,7 +95,7 @@ Each:
 - README quick start (one command per profile) and a feature tour mapping each QQQ feature to where the demo shows it.
 - Limits: local demo and reference only; production needs DNS, TLS, backups, monitoring, HA brokers.
 
-**C9. Publish (after qqq 4.1 GA with ESB and Next default; ask James first).**
+**C9. Publish (authorized after qqq 4.1 GA with ESB, accepted Next default and all release gates).**
 - Release a `qbit-build-parent` that imports the 4.1 BOM, re-pin the 8 qbits to it, and release them.
 - Pin qqq 4.1.x.
 - Tag `4.1.0`.
@@ -133,4 +133,4 @@ Most qbit repos have issues disabled, so their tasks are tracked in QRun-IO/qqq.
 | Q6 | C5 | C4 |
 | Q7 | C6, C8 | C5 |
 | Q8 | C7 | C6; ESB epic complete |
-| Q9 | C9 | qqq 4.1 GA (ESB + Next default); James's go-ahead |
+| Q9 | C9 | qqq 4.1 GA (ESB + accepted Next default); all #10 release gates |
