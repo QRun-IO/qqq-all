@@ -2,6 +2,8 @@
 
 A runnable reference app for QQQ 4.1 with two profiles: `core` uses local storage and embedded Artemis; `full` adds external storage, RabbitMQ, OpenSearch quick search, Keycloak, Mailpit, and the included qbits. It is a local demo under construction while QQQ 4.1 finishes. See the [design](docs/design.md), [plan](docs/plan.md), and [epic #1](https://github.com/QRun-IO/qqq-all/issues/1).
 
+The stack pins public Next **1.0.0-RC.8** for application testing. The owner approved an RC carrying its documented Firefox/WebKit/tablet failures, report/query and input parity gaps, sub-path hosting, real Google Drive verification, and visual-approval limitations. These remain open; passing qqq-all HTTP smoke checks do not establish browser parity or GA acceptance. See the [RC8 scope and approval](docs/release.md#next-rc8-integration).
+
 ## Quick start
 
 Install Java 21 and Maven, then build the app and its BOM from the repository root:
