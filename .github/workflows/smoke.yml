@@ -42,6 +42,17 @@ jobs:
           java-version: "21"
           cache: maven
       - name: Package full app for Docker image
-        run: mvn -B -ntp -pl qqq-all-app -am -DskipTests package
+        run: >-
+          mvn -B -ntp -pl qqq-all-app -am -DskipTests
+          dependency:build-classpath -DincludeGroupIds=com.kingsrook.qqq,com.kingsrook.qbits
+          -Dmdep.outputFile=target/smoke-classpath.txt package
       - name: Smoke full Compose over HTTP
         run: python3 scripts/run_full_smoke.py
+      - name: Retain sanitized full smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-smoke-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: target/smoke-diagnostics/*.json
+          if-no-files-found: warn
+          retention-days: 14

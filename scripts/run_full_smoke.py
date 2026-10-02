@@ -12,6 +12,7 @@ import urllib.parse
 from pathlib import Path
 
 from smoke import check_full
+from smoke_diagnostics import Diagnostics
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -95,6 +96,7 @@ def main():
     environment = os.environ.copy()
     environment.update(values)
     os.environ.update(values)
+    diagnostics = Diagnostics(ROOT / "target/smoke-diagnostics", environment)
     with tempfile.TemporaryDirectory(prefix="qqq-all-full-smoke-") as directory:
         env_file = Path(directory) / "compose.env"
         env_file.write_text("".join(f"{key}={value}\n" for key, value in values.items()))
@@ -103,10 +105,12 @@ def main():
                    "-f", str(ROOT / "compose.yaml"), "-f", str(ROOT / "scripts/compose.smoke.yaml"),
                    "--profile", "full"]
         try:
-            started = subprocess.run(command + ["up", "-d", "--build", "--wait", "--wait-timeout", "360"],
-                                     cwd=ROOT, env=environment, stdout=subprocess.DEVNULL,
-                                     stderr=subprocess.DEVNULL, timeout=480, check=False)
-            if started.returncode:
+            diagnostics.jar_hashes(ROOT)
+            diagnostics.pull(command, ROOT, environment)
+            started = diagnostics.run(command + ["up", "-d", "--build", "--wait", "--wait-timeout", "360"],
+                                      ROOT, environment, timeout=480)
+            diagnostics.write("startup.json", started)
+            if started["exit_code"] != 0:
                 raise AssertionError("full Compose stack did not become healthy")
             prepare_sftp_import_directory(command, environment, values.get("SFTP_USER", "qqq"))
             check_full(
@@ -115,10 +119,22 @@ def main():
                 lambda index, query: query_opensearch(command, environment, index, query),
                 120,
             )
+        except (AssertionError, OSError, ValueError, subprocess.TimeoutExpired) as error:
+            diagnostics.write("failure.json", {"type": type(error).__name__,
+                                              "message": diagnostics.sanitize(str(error))})
+            raise AssertionError(diagnostics.sanitize(str(error))) from None
         finally:
-            subprocess.run(command + ["down", "--volumes", "--remove-orphans"],
-                           cwd=ROOT, env=environment, stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL, timeout=120, check=False)
+            try:
+                diagnostics.collect(command, ROOT, environment)
+            except Exception as error:
+                # Evidence failure must not suppress the smoke error or private-stack cleanup.
+                print(f"smoke diagnostics collection failed: {type(error).__name__}", file=sys.stderr)
+            finally:
+                cleanup = diagnostics.run(command + ["down", "--volumes", "--remove-orphans"],
+                                          ROOT, environment, timeout=120)
+                diagnostics.write("cleanup.json", cleanup)
+                if cleanup["exit_code"] != 0 and sys.exc_info()[0] is None:
+                    raise AssertionError("private Compose cleanup failed; see sanitized diagnostics")
 
 
 if __name__ == "__main__":
