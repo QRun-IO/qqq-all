@@ -26,6 +26,10 @@ def management(qqq_version="${qqq.version}", qbit_version=None):
         f"<artifactId>qbit-{name}</artifactId><version>{qbit_version(name)}</version></dependency>"
         for name in QBITS
     )
+    dependencies += (
+        "<dependency><groupId>com.kingsrook.qqq</groupId><artifactId>qqq-frontend-next</artifactId>"
+        "<version>1.0.0-RC.8</version></dependency>"
+    )
     return f"<dependencyManagement><dependencies>{dependencies}</dependencies></dependencyManagement>"
 
 
@@ -44,6 +48,7 @@ class ReleaseGateTest(unittest.TestCase):
         (self.root / "qqq-all-bom/pom.xml").write_text(
             "<project><properties>"
             f"<qqq.version>{qqq_version}</qqq.version>"
+            "<qqq-frontend-next.version>1.0.0-RC.8</qqq-frontend-next.version>"
             + "".join(f"<qbit-{name}.version>{qbit_version}</qbit-{name}.version>" for name in QBITS)
             + "</properties>" + management() + "</project>"
         )
@@ -59,6 +64,7 @@ class ReleaseGateTest(unittest.TestCase):
                        "<groupId>com.kingsrook.qqq</groupId>"
                        "<artifactId>qqq-all-parent</artifactId><version>4.1.0</version></parent>"
                        "<artifactId>qqq-all-bom</artifactId><properties><qqq.version>4.1.0</qqq.version>"
+                       "<qqq-frontend-next.version>1.0.0-RC.8</qqq-frontend-next.version>"
                        + "".join(f"<qbit-{name}.version>1.2.3</qbit-{name}.version>" for name in QBITS)
                        + "</properties>" + managed + "</project>")
         return parent, bom
@@ -97,6 +103,8 @@ class ReleaseGateTest(unittest.TestCase):
             ({**run, "head_sha": "b" * 40}, jobs),
             ({**run, "conclusion": "failure"}, jobs),
             ({**run, "path": ".github/workflows/other.yml"}, jobs),
+            ({**run, "event": "workflow_dispatch"}, jobs),
+            ({**run, "head_branch": "main"}, jobs),
             (run, {"jobs": [jobs["jobs"][0]]}),
             (run, {"jobs": [jobs["jobs"][0], {"name": "full", "conclusion": "skipped"}]}),
         ):

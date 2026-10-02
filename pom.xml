@@ -62,15 +62,15 @@
                   <version>3.5.0</version>
                   <executions>
                      <execution>
-                        <id>require-ga-revision</id>
+                        <id>require-release-revision</id>
                         <phase>validate</phase>
                         <goals><goal>enforce</goal></goals>
                         <configuration>
                            <rules>
                               <requireProperty>
                                  <property>revision</property>
-                                 <regex>^4[.]1[.]0$</regex>
-                                 <message>Central release requires a reviewed 4.1.0 source revision.</message>
+                                 <regex>^4[.]1[.]0(-RC[.]1)?$</regex>
+                                 <message>Central release requires reviewed 4.1.0 or exact 4.1.0-RC.1 source pins.</message>
                               </requireProperty>
                               <requireReleaseDeps/>
                            </rules>

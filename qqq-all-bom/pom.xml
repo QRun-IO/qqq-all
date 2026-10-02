@@ -56,16 +56,17 @@
                            <rules>
                               <requireProperty>
                                  <property>qqq.version</property>
-                                 <regex>^4[.]1[.]0$</regex>
+                                 <regex>^\Q${revision}\E$</regex>
                               </requireProperty>
-                              <requireProperty><property>qbit-quick-search.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
-                              <requireProperty><property>qbit-user-role-permissions.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
-                              <requireProperty><property>qbit-customizable-table-views.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
-                              <requireProperty><property>qbit-standard-process-trace.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
-                              <requireProperty><property>qbit-webhooks.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
-                              <requireProperty><property>qbit-workflows.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
-                              <requireProperty><property>qbit-geo-data.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
-                              <requireProperty><property>qbit-sftp-data-integration.version</property><regex>^(?!.*SNAPSHOT).+$</regex></requireProperty>
+                              <requireProperty><property>qqq-frontend-next.version</property><regex>^[0-9]+[.][0-9]+[.][0-9]+(-RC[.][1-9][0-9]*)?$</regex></requireProperty>
+                              <requireProperty><property>qbit-quick-search.version</property><regex>^[0-9]+[.][0-9]+[.][0-9]+(-RC[.][1-9][0-9]*)?$</regex></requireProperty>
+                              <requireProperty><property>qbit-user-role-permissions.version</property><regex>^[0-9]+[.][0-9]+[.][0-9]+(-RC[.][1-9][0-9]*)?$</regex></requireProperty>
+                              <requireProperty><property>qbit-customizable-table-views.version</property><regex>^[0-9]+[.][0-9]+[.][0-9]+(-RC[.][1-9][0-9]*)?$</regex></requireProperty>
+                              <requireProperty><property>qbit-standard-process-trace.version</property><regex>^[0-9]+[.][0-9]+[.][0-9]+(-RC[.][1-9][0-9]*)?$</regex></requireProperty>
+                              <requireProperty><property>qbit-webhooks.version</property><regex>^[0-9]+[.][0-9]+[.][0-9]+(-RC[.][1-9][0-9]*)?$</regex></requireProperty>
+                              <requireProperty><property>qbit-workflows.version</property><regex>^[0-9]+[.][0-9]+[.][0-9]+(-RC[.][1-9][0-9]*)?$</regex></requireProperty>
+                              <requireProperty><property>qbit-geo-data.version</property><regex>^[0-9]+[.][0-9]+[.][0-9]+(-RC[.][1-9][0-9]*)?$</regex></requireProperty>
+                              <requireProperty><property>qbit-sftp-data-integration.version</property><regex>^[0-9]+[.][0-9]+[.][0-9]+(-RC[.][1-9][0-9]*)?$</regex></requireProperty>
                            </rules>
                         </configuration>
                      </execution>
