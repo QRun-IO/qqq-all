@@ -23,6 +23,8 @@ class DiagnosticsTest(unittest.TestCase):
             cleaned = []
 
             def run(args, **kwargs):
+                if 'config' in args:
+                    return subprocess.CompletedProcess(args, 0, json.dumps({'services': {'db': {'image': 'postgres:16-alpine'}}}), '')
                 if 'up' in args:
                     return subprocess.CompletedProcess(args, 1, 'postgres unhealthy private-password-123', '')
                 if 'down' in args:
@@ -51,6 +53,8 @@ class DiagnosticsTest(unittest.TestCase):
             values = {'QQQ_ALL_PORT': '20001', 'KEYCLOAK_PORT': '20002',
                       'DB_PASSWORD': 'hidden-fixture'}
             def run(args, **kwargs):
+                if 'config' in args:
+                    return subprocess.CompletedProcess(args, 0, json.dumps({'services': {'db': {'image': 'postgres:16-alpine'}}}), '')
                 if 'down' in args:
                     raise subprocess.TimeoutExpired(args, 120, output='hidden-fixture')
                 return subprocess.CompletedProcess(args, 0, '', '')
@@ -75,6 +79,8 @@ class DiagnosticsTest(unittest.TestCase):
                       'DB_PASSWORD': 'hidden-fixture'}
             cleanup = []
             def run(args, **kwargs):
+                if 'config' in args:
+                    return subprocess.CompletedProcess(args, 0, json.dumps({'services': {'db': {'image': 'postgres:16-alpine'}}}), '')
                 if 'up' in args:
                     raise subprocess.TimeoutExpired(args, 480, output=b'postgres unhealthy hidden-fixture')
                 if 'down' in args:
@@ -91,6 +97,74 @@ class DiagnosticsTest(unittest.TestCase):
             self.assertEqual('TimeoutExpired', receipt['error'])
             self.assertIn('postgres unhealthy', receipt['output'])
             self.assertNotIn('hidden-fixture', receipt['output'])
+
+    def test_pull_failure_names_service_image_registry_and_stops_before_up(self):
+        module = self.diagnostics_module()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'compose.yaml').touch()
+            values = {'QQQ_ALL_PORT': '20001', 'KEYCLOAK_PORT': '20002',
+                      'DB_PASSWORD': 'pull-secret'}
+            calls = []
+            model = {'services': {
+                'app-full': {'image': 'qqq-all:local', 'build': {'context': '.'}},
+                'minio-init': {'image': 'public.ecr.aws/aws-cli/aws-cli:2.27.41',
+                               'environment': {'DO_NOT_RETAIN': 'raw-config-fixture'}},
+                'sftp': {'image': 'atmoz/sftp:alpine'}}}
+            def run(args, **kwargs):
+                calls.append(args)
+                if 'config' in args:
+                    self.assertIn('--no-interpolate', args)
+                    self.assertIn('--no-env-resolution', args)
+                    return subprocess.CompletedProcess(args, 0, json.dumps(model), '')
+                if 'pull' in args:
+                    self.assertEqual('minio-init', args[-1])
+                    self.assertNotIn('--ignore-pull-failures', args)
+                    self.assertNotIn('--include-deps', args)
+                    return subprocess.CompletedProcess(args, 1, '', 'toomanyrequests: Rate exceeded pull-secret')
+                return subprocess.CompletedProcess(args, 0, '', '')
+            with (mock.patch.object(run_full_smoke, 'ROOT', root),
+                  mock.patch.object(run_full_smoke, 'demo_environment', return_value=values),
+                  mock.patch.object(run_full_smoke.subprocess, 'run', side_effect=run),
+                  mock.patch.object(run_full_smoke, 'check_full'),
+                  mock.patch.dict(os.environ)):
+                with self.assertRaisesRegex(AssertionError, 'minio-init'):
+                    run_full_smoke.main()
+            self.assertFalse(any('up' in args for args in calls))
+            receipt = json.loads((root / 'target/smoke-diagnostics/pulls.json').read_text())
+            failed = receipt['pulls'][-1]
+            self.assertEqual('public.ecr.aws', failed['registry'])
+            self.assertEqual(model['services']['minio-init']['image'], failed['image'])
+            self.assertEqual(1, failed['result']['exit_code'])
+            self.assertIn('Rate exceeded', failed['result']['output'])
+            text = json.dumps(receipt)
+            self.assertNotIn('pull-secret', text)
+            self.assertNotIn('raw-config-fixture', text)
+
+    def test_successful_pulls_use_same_images_without_building_or_starting(self):
+        module = self.diagnostics_module()
+        with tempfile.TemporaryDirectory() as directory:
+            evidence = module.Diagnostics(Path(directory), {})
+            self.assertTrue(hasattr(evidence, 'pull'), 'explicit pull diagnostics not implemented')
+            calls = []
+            model = {'services': {'postgres': {'image': 'postgres:16-alpine'},
+                                  'minio': {'image': 'qqq-all-minio:local', 'build': {'context': './infra/minio'}},
+                                  'mongo': {'image': 'mongo:7'}}}
+            def run(args, **kwargs):
+                calls.append(args)
+                output = json.dumps(model) if 'config' in args else 'pulled'
+                return subprocess.CompletedProcess(args, 0, output, '')
+            with mock.patch.object(module.subprocess, 'run', side_effect=run):
+                evidence.pull(['docker', 'compose', '-p', 'private'], Path(directory), {})
+            pulls = [args for args in calls if 'pull' in args]
+            self.assertEqual(['mongo', 'postgres'], [args[-1] for args in pulls])
+            for args in pulls:
+                self.assertEqual('1', args[args.index('--parallel') + 1])
+                self.assertEqual('missing', args[args.index('--policy') + 1])
+            self.assertFalse(any('up' in args or 'build' in args for args in calls))
+            receipt = json.loads((Path(directory) / 'pulls.json').read_text())
+            self.assertEqual(['mongo:7', 'postgres:16-alpine'], [r['image'] for r in receipt['pulls']])
+            self.assertEqual(['docker.io', 'docker.io'], [r['registry'] for r in receipt['pulls']])
 
     def diagnostics_module(self):
         try:

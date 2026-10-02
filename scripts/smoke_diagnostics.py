@@ -102,6 +102,44 @@ class Diagnostics:
                 data['application_sha256'] = hashlib.file_digest(stream, 'sha256').hexdigest()
         self.write('jars.json', data)
 
+    def pull(self, command, root, environment):
+        receipt = {'pulls': []}
+        try:
+            # Keep the uninterpolated model in memory only; retain no service environment.
+            model = subprocess.run(command + ['config', '--format', 'json', '--no-interpolate',
+                                              '--no-env-resolution'], cwd=root, env=environment,
+                                   capture_output=True, text=True, timeout=15, check=False)
+            if model.returncode:
+                raise ValueError('Compose image selection failed')
+            services = json.loads(model.stdout)['services']
+            if not isinstance(services, dict) or not 1 <= len(services) <= 32:
+                raise ValueError('unexpected service inventory')
+            selected = [(name, service['image']) for name, service in sorted(services.items())
+                        if 'build' not in service]
+            if any(not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9_.-]*', name)
+                   or not isinstance(image, str) or '${' in image for name, image in selected):
+                raise ValueError('unresolved service image')
+        except (KeyError, TypeError, ValueError, OSError, subprocess.TimeoutExpired) as error:
+            receipt['selection_error'] = type(error).__name__
+            self.write('pulls.json', receipt)
+            raise AssertionError('could not select Compose service images; see pulls.json') from None
+        deadline = time.monotonic() + 480
+        for service, image in selected:
+            first = image.split('/')[0]
+            registry = first if '/' in image and ('.' in first or ':' in first or first == 'localhost') else 'docker.io'
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                result = {'exit_code': None, 'error': 'pull-stage budget exhausted', 'output': ''}
+            else:
+                result = self.run(command + ['--parallel', '1', '--progress', 'plain', 'pull',
+                                             '--ignore-buildable', '--policy', 'missing', service],
+                                  root, environment, timeout=min(120, remaining))
+            receipt['pulls'].append({'service': service, 'image': image,
+                                     'registry': registry, 'result': result})
+            self.write('pulls.json', receipt)
+            if result['exit_code'] != 0:
+                raise AssertionError(f'Compose pull failed for {service} ({image}); see pulls.json')
+
     def collect(self, command, root, environment):
         deadline = time.monotonic() + 60
         def run(args):

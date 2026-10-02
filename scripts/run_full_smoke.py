@@ -106,6 +106,7 @@ def main():
                    "--profile", "full"]
         try:
             diagnostics.jar_hashes(ROOT)
+            diagnostics.pull(command, ROOT, environment)
             started = diagnostics.run(command + ["up", "-d", "--build", "--wait", "--wait-timeout", "360"],
                                       ROOT, environment, timeout=480)
             diagnostics.write("startup.json", started)

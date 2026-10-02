@@ -192,6 +192,7 @@ class SmokeTest(unittest.TestCase):
             with (mock.patch.object(run_full_smoke, "ROOT", root),
                   mock.patch.object(run_full_smoke, "demo_environment", return_value=values),
                   mock.patch.object(run_full_smoke, "published_port", return_value=20003),
+                  mock.patch.object(run_full_smoke.Diagnostics, "pull"),
                   mock.patch.object(run_full_smoke.subprocess, "run",
                                     return_value=subprocess.CompletedProcess([], 0)),
                   mock.patch.object(run_full_smoke, "check_full", side_effect=verify_credentials) as check,
