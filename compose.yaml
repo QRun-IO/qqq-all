@@ -181,7 +181,9 @@ services:
     profiles: [full]
     command: "${SFTP_USER:-qqq}:${SFTP_PASSWORD:?set SFTP_PASSWORD}:1001:1001:upload"
     volumes:
-      - sftp-data:/home/${SFTP_USER:-qqq}/upload
+      - type: volume
+        source: sftp-data
+        target: /home/${SFTP_USER:-qqq}/upload
     healthcheck:
       test: ["CMD-SHELL", "pgrep sshd >/dev/null"]
       interval: 5s

@@ -32,6 +32,9 @@ class ReleaseBundleTest(unittest.TestCase):
                 self.assertNotIn("qqq-all-4.1.0-RC.1/Dockerfile", names)
                 bundle.extractall(extracted, filter="data")
             root = extracted / "qqq-all-4.1.0-RC.1"
+            bundled = json.loads((root / "compose.yaml").read_text())
+            self.assertEqual("/home/${SFTP_USER:-qqq}/upload",
+                             bundled["services"]["sftp"]["volumes"][0]["target"])
             environment = {key: value for key, value in os.environ.items() if not key.startswith("COMPOSE_")}
             result = subprocess.run(["docker", "compose", "--env-file", ".env.example", "--profile", "*",
                                      "-f", "compose.yaml", "config", "--format", "json"],
