@@ -122,6 +122,8 @@ class FullProfileTest
       values.put("QQQ_ALL_OIDC_CLIENT_SECRET", "fixture");
       values.put("QQQ_ALL_OPENSEARCH_HOST", "127.0.0.1");
       values.put("QQQ_ALL_OPENSEARCH_PORT", "1");
+      // Nothing listens on port 1, so quick search must boot degraded instead of failing fast.
+      values.put("QQQ_ALL_OPENSEARCH_STARTUP_MODE", "DEGRADED");
       return values;
    }
 }
