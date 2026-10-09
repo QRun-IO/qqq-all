@@ -6,11 +6,13 @@
  */
 package com.kingsrook.qqq.all;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import com.kingsrook.qbits.quicksearch.QuickSearchQBitConfig;
 import com.kingsrook.qbits.quicksearch.QuickSearchStartupMode;
@@ -40,6 +42,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FullQBitsTest
 {
+   private static final Path    QUICK_SEARCH_GRANTS = Path.of("..", "infra", "postgres", "06-quick-search-permissions.sql");
+   private static final Pattern PERMISSION_NAME     = Pattern.compile("'(quickSearch[A-Za-z]*[.](?:hasAccess|read|write))'");
+
    @TempDir Path dataDirectory;
 
    @Test
@@ -131,16 +136,35 @@ class FullQBitsTest
    }
 
    @Test
-   void quickSearchFailsFastWithoutOpenSearchUnlessDegraded()
+   void quickSearchBracketsAnIpv6OpenSearchHost() throws Exception
+   {
+      Map<String, String> environment = new HashMap<>(FullProfileTest.environment());
+      environment.put("QQQ_ALL_OPENSEARCH_HOST", "::1");
+      QuickSearchQBitConfig search = quickSearch(new FullProfileApplication(dataDirectory,
+         FullProfileSettings.from(environment)).defineQInstance());
+
+      assertEquals("http://[::1]:1", search.getOpensearchUrl());
+   }
+
+   @Test
+   void quickSearchFailsFastWithoutOpenSearchUnlessDegraded() throws Exception
    {
       Map<String, String> environment = new HashMap<>(FullProfileTest.environment());
       environment.remove("QQQ_ALL_OPENSEARCH_STARTUP_MODE");
-      assertThrows(QException.class, () -> new FullProfileApplication(dataDirectory,
+      QException failFast = assertThrows(QException.class, () -> new FullProfileApplication(dataDirectory,
          FullProfileSettings.from(environment)).defineQInstance());
+      assertTrue(failFast.getMessage().contains("[qqq-all-customers]"), failFast.getMessage());
+      assertTrue(failFast.getMessage().contains("startupMode=DEGRADED"), failFast.getMessage());
+
+      environment.put("QQQ_ALL_OPENSEARCH_STARTUP_MODE", " degraded ");
+      assertEquals(QuickSearchStartupMode.DEGRADED, quickSearch(new FullProfileApplication(dataDirectory,
+         FullProfileSettings.from(environment)).defineQInstance()).getStartupMode());
 
       environment.put("QQQ_ALL_OPENSEARCH_STARTUP_MODE", "SOMETIMES");
-      assertThrows(IllegalArgumentException.class, () -> new FullProfileApplication(dataDirectory,
+      IllegalArgumentException invalid = assertThrows(IllegalArgumentException.class, () -> new FullProfileApplication(dataDirectory,
          FullProfileSettings.from(environment)).defineQInstance());
+      assertEquals("QQQ_ALL_OPENSEARCH_STARTUP_MODE must be FAIL_FAST or DEGRADED; found [SOMETIMES]", invalid.getMessage());
+      assertNotNull(invalid.getCause());
    }
 
    @Test
@@ -161,10 +185,12 @@ class FullQBitsTest
          QContext.clear();
       }
 
-      // The grants infra/postgres/06-quick-search-permissions.sql gives the admin role.
-      QContext.init(instance, new QSession().withPermissions("quickSearchAdmin.hasAccess",
-         "quickSearchIndex.read", "quickSearchIndex.write", "quickSearchIndexRun.read", "quickSearchIndexRun.write",
-         "quickSearchFailedEvent.read", "quickSearchFailedEvent.write"));
+      // Exactly the permissions the grant file creates and gives the admin role.
+      String grants = Files.readString(QUICK_SEARCH_GRANTS);
+      Integer roleGrantStart = grants.indexOf("INSERT INTO role_permission_int");
+      Set<String> created = permissionNames(grants.substring(0, roleGrantStart));
+      assertEquals(created, permissionNames(grants.substring(roleGrantStart)));
+      QContext.init(instance, new QSession().withPermissions(created.toArray(String[]::new)));
       try
       {
          for(String processName : Set.of("quickSearchFullReindex", "quickSearchReconcileIndex", "quickSearchBasepullIndex"))
@@ -225,6 +251,11 @@ class FullQBitsTest
       {
          QContext.clear();
       }
+   }
+
+   private static Set<String> permissionNames(String sql)
+   {
+      return PERMISSION_NAME.matcher(sql).results().map(match -> match.group(1)).collect(Collectors.toSet());
    }
 
    private static QuickSearchQBitConfig quickSearch(QInstance instance)

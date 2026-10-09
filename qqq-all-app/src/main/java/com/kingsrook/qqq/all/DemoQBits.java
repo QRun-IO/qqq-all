@@ -6,7 +6,10 @@
  */
 package com.kingsrook.qqq.all;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
+import java.util.Locale;
 import com.kingsrook.qbits.customizabletableviews.CustomizableTableViewsQBitConfig;
 import com.kingsrook.qbits.customizabletableviews.CustomizableTableViewsQBitProducer;
 import com.kingsrook.qbits.quicksearch.QuickSearchQBitConfig;
@@ -148,10 +151,9 @@ final class DemoQBits
 
    static void addFull(QInstance instance, FullProfileSettings settings) throws QException
    {
-      String scheme = Boolean.parseBoolean(settings.getOrDefault("OPENSEARCH_SSL", "false")) ? "https" : "http";
       QuickSearchQBitConfig searchConfig = new QuickSearchQBitConfig()
          .withBackendName("postgres")
-         .withOpensearchUrl(scheme + "://" + settings.get("OPENSEARCH_HOST") + ":" + settings.port("OPENSEARCH_PORT", "9200"))
+         .withOpensearchUrl(opensearchUrl(settings))
          .withOpensearchIndexName(settings.getOrDefault("OPENSEARCH_INDEX", "qqq-all-customers"))
          .withSchedulerName("demoScheduler")
          .withStartupMode(quickSearchStartupMode(settings))
@@ -189,17 +191,32 @@ final class DemoQBits
          })).produce(instance, "demo-import");
    }
 
+   /** URI adds the brackets an IPv6 literal host needs. */
+   static String opensearchUrl(FullProfileSettings settings)
+   {
+      String scheme = Boolean.parseBoolean(settings.getOrDefault("OPENSEARCH_SSL", "false")) ? "https" : "http";
+      String host = settings.get("OPENSEARCH_HOST");
+      try
+      {
+         return new URI(scheme, null, host, settings.port("OPENSEARCH_PORT", "9200"), null, null, null).toString();
+      }
+      catch(URISyntaxException e)
+      {
+         throw new IllegalArgumentException("Invalid host in QQQ_ALL_OPENSEARCH_HOST [" + host + "]", e);
+      }
+   }
+
    /** FAIL_FAST (the qbit default) stops startup when OpenSearch is unreachable; DEGRADED boots and retries on first use. */
-   private static QuickSearchStartupMode quickSearchStartupMode(FullProfileSettings settings)
+   static QuickSearchStartupMode quickSearchStartupMode(FullProfileSettings settings)
    {
       String mode = settings.getOrDefault("OPENSEARCH_STARTUP_MODE", QuickSearchStartupMode.FAIL_FAST.name());
       try
       {
-         return QuickSearchStartupMode.valueOf(mode);
+         return QuickSearchStartupMode.valueOf(mode.trim().toUpperCase(Locale.ROOT));
       }
       catch(IllegalArgumentException e)
       {
-         throw new IllegalArgumentException("QQQ_ALL_OPENSEARCH_STARTUP_MODE must be FAIL_FAST or DEGRADED");
+         throw new IllegalArgumentException("QQQ_ALL_OPENSEARCH_STARTUP_MODE must be FAIL_FAST or DEGRADED; found [" + mode + "]", e);
       }
    }
 }
