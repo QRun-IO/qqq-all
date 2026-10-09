@@ -6,11 +6,15 @@
  */
 package com.kingsrook.qqq.all;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
+import java.util.Locale;
 import com.kingsrook.qbits.customizabletableviews.CustomizableTableViewsQBitConfig;
 import com.kingsrook.qbits.customizabletableviews.CustomizableTableViewsQBitProducer;
 import com.kingsrook.qbits.quicksearch.QuickSearchQBitConfig;
 import com.kingsrook.qbits.quicksearch.QuickSearchQBitProducer;
+import com.kingsrook.qbits.quicksearch.QuickSearchStartupMode;
 import com.kingsrook.qbits.quicksearch.SearchableFieldConfig;
 import com.kingsrook.qbits.sftpdataintegration.SFTPDataIntegrationQBitConfig;
 import com.kingsrook.qbits.sftpdataintegration.SFTPDataIntegrationQBitProducer;
@@ -34,7 +38,6 @@ import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
 import com.kingsrook.qqq.backend.core.model.metadata.qbits.ProvidedOrSuppliedTableConfig;
-import com.kingsrook.qqq.backend.core.model.metadata.qbits.QBitMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.tables.QTableMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValue;
 import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValueSource;
@@ -150,17 +153,23 @@ final class DemoQBits
    {
       QuickSearchQBitConfig searchConfig = new QuickSearchQBitConfig()
          .withBackendName("postgres")
-         .withOpensearchHost(settings.get("OPENSEARCH_HOST"))
-         .withOpensearchPort(settings.port("OPENSEARCH_PORT", "9200"))
+         .withOpensearchUrl(opensearchUrl(settings))
          .withOpensearchIndexName(settings.getOrDefault("OPENSEARCH_INDEX", "qqq-all-customers"))
-         .withOpensearchUsername(settings.get("OPENSEARCH_USER"))
-         .withOpensearchPassword(settings.get("OPENSEARCH_PASSWORD"))
-         .withUseSsl(Boolean.parseBoolean(settings.getOrDefault("OPENSEARCH_SSL", "false")))
+         .withSchedulerName("demoScheduler")
+         .withStartupMode(quickSearchStartupMode(settings))
          .withSearchableTable("customer", List.of(new SearchableFieldConfig("name"),
             new SearchableFieldConfig("email")));
+      // Secrets stay in the environment: the qbit resolves these references only when it connects.
+      if(settings.getOrDefault("OPENSEARCH_USER", null) != null)
+      {
+         searchConfig.withOpensearchUsername("${env.QQQ_ALL_OPENSEARCH_USER}");
+      }
+      if(settings.getOrDefault("OPENSEARCH_PASSWORD", null) != null)
+      {
+         searchConfig.withOpensearchPassword("${env.QQQ_ALL_OPENSEARCH_PASSWORD}");
+      }
+      // The producer registers its own QBitMetaData (com.kingsrook.qbits:quick-search).
       new QuickSearchQBitProducer().withConfig(searchConfig).produce(instance);
-      instance.addQBit(new QBitMetaData().withGroupId("com.kingsrook.qbits")
-         .withArtifactId("quick-search").withVersion("0.2.1-SNAPSHOT").withConfig(searchConfig));
 
       new SavedBulkLoadProfileMetaDataProvider().defineAll(instance, "postgres", null);
       new SavedReportsMetaDataProvider().defineAll(instance, "postgres", "sftp", null);
@@ -180,5 +189,34 @@ final class DemoQBits
             }
             return table;
          })).produce(instance, "demo-import");
+   }
+
+   /** URI adds the brackets an IPv6 literal host needs. */
+   static String opensearchUrl(FullProfileSettings settings)
+   {
+      String scheme = Boolean.parseBoolean(settings.getOrDefault("OPENSEARCH_SSL", "false")) ? "https" : "http";
+      String host = settings.get("OPENSEARCH_HOST");
+      try
+      {
+         return new URI(scheme, null, host, settings.port("OPENSEARCH_PORT", "9200"), null, null, null).toString();
+      }
+      catch(URISyntaxException e)
+      {
+         throw new IllegalArgumentException("Invalid host in QQQ_ALL_OPENSEARCH_HOST [" + host + "]", e);
+      }
+   }
+
+   /** FAIL_FAST (the qbit default) stops startup when OpenSearch is unreachable; DEGRADED boots and retries on first use. */
+   static QuickSearchStartupMode quickSearchStartupMode(FullProfileSettings settings)
+   {
+      String mode = settings.getOrDefault("OPENSEARCH_STARTUP_MODE", QuickSearchStartupMode.FAIL_FAST.name());
+      try
+      {
+         return QuickSearchStartupMode.valueOf(mode.trim().toUpperCase(Locale.ROOT));
+      }
+      catch(IllegalArgumentException e)
+      {
+         throw new IllegalArgumentException("QQQ_ALL_OPENSEARCH_STARTUP_MODE must be FAIL_FAST or DEGRADED; found [" + mode + "]", e);
+      }
    }
 }

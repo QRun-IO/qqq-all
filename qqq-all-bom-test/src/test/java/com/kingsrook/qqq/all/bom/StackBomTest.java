@@ -98,6 +98,7 @@ class StackBomTest
       assertEquals(List.of(), missing, "Artifacts the stack BOM does not manage");
       assertEquals("3.9.0", managedVersions.get("com.rabbitmq.jms:rabbitmq-jms"));
       assertEquals("1.0.0-RC.8", managedVersions.get("com.kingsrook.qqq:qqq-frontend-next"));
+      assertEquals("1.0.0-RC.2", managedVersions.get("com.kingsrook.qbits:qbit-quick-search"));
    }
 
 
