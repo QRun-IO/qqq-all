@@ -44,7 +44,7 @@ class MinioBackendTest
       action.preAction(backend);
       S3Utils utils = utils(action);
       assertEquals("http://minio.example.test:9000/qqq-demo/example.json",
-         utils.getAmazonS3().getUrl("qqq-demo", "example.json").toString());
+         utils.getS3Client().utilities().getUrl(request -> request.bucket("qqq-demo").key("example.json")).toString());
    }
 
    @Test
@@ -88,8 +88,8 @@ class MinioBackendTest
 
          AbstractS3Action query = (AbstractS3Action) module.getQueryInterface();
          query.preAction(backend);
-         assertEquals("documents/example.json", utils(query).getAmazonS3()
-            .listObjectsV2("qqq-demo").getObjectSummaries().getFirst().getKey());
+         assertEquals("documents/example.json", utils(query).getS3Client()
+            .listObjectsV2(request -> request.bucket("qqq-demo")).contents().getFirst().key());
 
          AbstractS3Action insert = (AbstractS3Action) module.getInsertInterface();
          insert.preAction(backend);
