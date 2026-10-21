@@ -148,10 +148,12 @@ class SmokeTest(unittest.TestCase):
         pom = ET.parse(ROOT / "qqq-all-app" / "pom.xml")
         final_name = pom.findtext(".//{http://maven.apache.org/POM/4.0.0}build/"
                                   "{http://maven.apache.org/POM/4.0.0}finalName")
-        workflow = (ROOT / ".github" / "workflows" / "smoke.yml").read_text()
-        command = re.search(r"run: python3 scripts/run_core_smoke.py (\S+)", workflow)
-        self.assertIsNotNone(command)
-        self.assertEqual(f"qqq-all-app/target/{final_name}.jar", command.group(1))
+        # The shared all profile owns the smoke command; this repository owns
+        # the Maven artifact it consumes. Keep that cross-repository contract.
+        self.assertEqual("qqq-all-app", final_name)
+        manifest = (ROOT / ".qqq-ci.yml").read_text()
+        self.assertRegex(manifest, r"(?m)^profile: all$")
+
 
     def test_standalone_full_smoke_requires_explicit_search_endpoint(self):
         result = subprocess.run(

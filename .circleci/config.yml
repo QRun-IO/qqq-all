@@ -1,28 +1,14 @@
----
-
 version: 2.1
-
+setup: true
 orbs:
-  qqq-orb: kingsrook/qqq-orb@0.6.8
-
-commands:
-  configure-package-install:
-    steps:
-      - run:
-          name: Keep package installation unattended
-          command: |
-            # These build machines are discarded after the job.
-            # Use Ubuntu's archive mirror, which also carries the signed security suite.
-            sudo sed -i 's|http://security.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list
-            sudo install -d /etc/needrestart/conf.d
-            printf '%s\n' '$nrconf{restart} = "l";' | sudo tee /etc/needrestart/conf.d/99-qqq-ci.conf >/dev/null
-
+  qqq-orb: kingsrook/qqq-orb@0.7.9
 workflows:
-
-  # Build and unit tests on every branch push. Dependencies are public
-  # (Maven Central and the Central snapshot repository), so no context is needed.
-  test_only:
+  setup:
     jobs:
-      - qqq-orb/mvn_test_only:
-          pre-steps:
-            - configure-package-install
+    - qqq-orb/generate_pipeline:
+        orb_version: 0.7.9
+        filters:
+          branches:
+            ignore: automation/qbit-rc-pending
+          tags:
+            only: /.*/

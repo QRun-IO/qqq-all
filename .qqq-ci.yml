@@ -1,0 +1,6 @@
+profile: all
+orb_version: 0.7.9
+default_branch: develop
+publish:
+  snapshot: true
+publish_context: qqq-maven-registry-credentials
