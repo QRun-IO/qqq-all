@@ -42,7 +42,7 @@ permissions:
   checks: read
 jobs:
   release:
-    uses: QRun-IO/qqq-orb/.github/workflows/qqq-all-release.yml@65265e48a4176d8fb0f4f744e2919bad587bd5ca
+    uses: QRun-IO/qqq-orb/.github/workflows/qqq-all-release.yml@0f33ddadf88b9a1b940b8883782fe2000ee1d2bd
     with:
       version: ${{ inputs.version }}
       release_sha: ${{ inputs.release_sha }}
