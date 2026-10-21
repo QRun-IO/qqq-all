@@ -236,7 +236,7 @@ class SmokeTest(unittest.TestCase):
                 run_full_smoke.prepare_sftp_import_directory(["docker", "compose"], {}, "qqq")
 
     def test_oidc_cookie_is_sent_only_to_loopback_http_app(self):
-        from smoke import allow_loopback_http_session
+        from smoke import allow_loopback_http_session, require_oidc_session
 
         class SecureSession(DemoHandler):
             def do_GET(self):
@@ -260,7 +260,17 @@ class SmokeTest(unittest.TestCase):
         thread.start()
         try:
             client = SmokeClient(f"http://127.0.0.1:{server.server_port}")
+            with self.assertRaisesRegex(AssertionError, "HttpOnly OIDC session"):
+                require_oidc_session(client, {})
             client.request("/login")
+            require_oidc_session(client, {})
+            with self.assertRaisesRegex(AssertionError, "exposed"):
+                require_oidc_session(client, {"uuid": "test-session"})
+            cookie = next(iter(client.cookies))
+            cookie._rest.clear()
+            with self.assertRaisesRegex(AssertionError, "HttpOnly OIDC session"):
+                require_oidc_session(client, {})
+            cookie.set_nonstandard_attr("HttpOnly", None)
             with self.assertRaisesRegex(AssertionError, "HTTP 403"):
                 client.request("/protected")
             allow_loopback_http_session(client)

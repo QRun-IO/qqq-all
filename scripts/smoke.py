@@ -119,6 +119,16 @@ class SmokeClient:
             raise AssertionError(f"missing expected {table} {field}")
 
 
+def require_oidc_session(client, result):
+    # Next uses an HttpOnly cookie; current QQQ intentionally omits its UUID from JSON.
+    cookies = [cookie for cookie in client.cookies if cookie.name == "sessionUUID"]
+    if (len(cookies) != 1 or not cookies[0].value
+            or not cookies[0].has_nonstandard_attr("HttpOnly")):
+        raise AssertionError("QQQ did not establish an HttpOnly OIDC session")
+    if "uuid" in result:
+        raise AssertionError("QQQ exposed the HttpOnly session UUID in JSON")
+
+
 def allow_loopback_http_session(client):
     parsed = urllib.parse.urlsplit(client.base_url)
     if parsed.scheme != "http" or parsed.hostname not in ("127.0.0.1", "localhost"):
@@ -273,8 +283,7 @@ def oidc_login(client, keycloak_url, username, password):
         result = client.json("/manageSession", {
             "code": parameters["code"][0], "redirectUri": callback, "codeVerifier": verifier
         })
-        if not result.get("uuid") or not any(cookie.name == "sessionUUID" for cookie in client.cookies):
-            raise AssertionError("QQQ did not establish an OIDC session")
+        require_oidc_session(client, result)
         if urllib.parse.urlsplit(client.base_url).scheme == "http":
             allow_loopback_http_session(client)
     except (OSError, KeyError, ValueError, urllib.error.HTTPError) as error:
