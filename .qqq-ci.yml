@@ -1,5 +1,5 @@
 profile: all
-orb_version: 0.7.9
+orb_version: 0.7.11
 default_branch: develop
 publish:
   snapshot: true
