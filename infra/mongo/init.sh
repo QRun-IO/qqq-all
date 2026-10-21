@@ -2,7 +2,7 @@
 set -euo pipefail
 
 for attempt in {1..30}; do
-   if mongosh --host mongo --quiet -u "${MONGO_USER}" -p "${MONGO_PASSWORD}" --authenticationDatabase admin \
+   if mongosh --host mongo --quiet --username="${MONGO_USER}" --password="${MONGO_PASSWORD}" --authenticationDatabase admin \
       --eval 'try { rs.status().ok } catch (e) { if (e.codeName === "NotYetInitialized") { rs.initiate({_id: process.env.MONGO_REPLICA_SET, members: [{_id: 0, host: "mongo:27017"}]}).ok } else { throw e } }' | grep -q 1; then
       exit 0
    fi

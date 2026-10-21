@@ -148,10 +148,12 @@ class SmokeTest(unittest.TestCase):
         pom = ET.parse(ROOT / "qqq-all-app" / "pom.xml")
         final_name = pom.findtext(".//{http://maven.apache.org/POM/4.0.0}build/"
                                   "{http://maven.apache.org/POM/4.0.0}finalName")
-        workflow = (ROOT / ".github" / "workflows" / "smoke.yml").read_text()
-        command = re.search(r"run: python3 scripts/run_core_smoke.py (\S+)", workflow)
-        self.assertIsNotNone(command)
-        self.assertEqual(f"qqq-all-app/target/{final_name}.jar", command.group(1))
+        # The shared all profile owns the smoke command; this repository owns
+        # the Maven artifact it consumes. Keep that cross-repository contract.
+        self.assertEqual("qqq-all-app", final_name)
+        manifest = (ROOT / ".qqq-ci.yml").read_text()
+        self.assertRegex(manifest, r"(?m)^profile: all$")
+
 
     def test_standalone_full_smoke_requires_explicit_search_endpoint(self):
         result = subprocess.run(
@@ -234,7 +236,7 @@ class SmokeTest(unittest.TestCase):
                 run_full_smoke.prepare_sftp_import_directory(["docker", "compose"], {}, "qqq")
 
     def test_oidc_cookie_is_sent_only_to_loopback_http_app(self):
-        from smoke import allow_loopback_http_session
+        from smoke import allow_loopback_http_session, require_oidc_session
 
         class SecureSession(DemoHandler):
             def do_GET(self):
@@ -258,7 +260,17 @@ class SmokeTest(unittest.TestCase):
         thread.start()
         try:
             client = SmokeClient(f"http://127.0.0.1:{server.server_port}")
+            with self.assertRaisesRegex(AssertionError, "HttpOnly OIDC session"):
+                require_oidc_session(client, {})
             client.request("/login")
+            require_oidc_session(client, {})
+            with self.assertRaisesRegex(AssertionError, "exposed"):
+                require_oidc_session(client, {"uuid": "test-session"})
+            cookie = next(iter(client.cookies))
+            cookie._rest.clear()
+            with self.assertRaisesRegex(AssertionError, "HttpOnly OIDC session"):
+                require_oidc_session(client, {})
+            cookie.set_nonstandard_attr("HttpOnly", None)
             with self.assertRaisesRegex(AssertionError, "HTTP 403"):
                 client.request("/protected")
             allow_loopback_http_session(client)

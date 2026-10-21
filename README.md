@@ -41,7 +41,7 @@ Full adds sample tables on PostgreSQL, MySQL, MongoDB, MinIO S3, and SFTP. It in
 
 To stop the full stack, run `docker compose --profile full down`. Add `--volumes` only when you intend to erase demo data. For a fresh Artemis volume, the configured login is required; old volumes created for anonymous access should be recreated. This reference stack uses demo credentials and is not a production deployment.
 
-The [develop image workflow](.github/workflows/publish-image.yml) verifies the build and publishes to GHCR only after an organization owner bootstraps the container package and sets its visibility to public. Until then, image publication is skipped and local Compose remains available.
+The [canonical QQQ pipeline](.circleci/config.yml), configured by [.qqq-ci.yml](.qqq-ci.yml), builds once and runs core/full smoke checks through the shared orb. Its develop-image job publishes to GHCR only after the container package exists and its visibility is public. Until then, image publication is skipped and local Compose remains available.
 
 The [4.1.0 release procedure](docs/release.md) describes the separate Maven parent/BOM publication path and the manually gated, exact-commit [release workflow](.github/workflows/release.yml). The workflow will not release the current snapshot build.
 

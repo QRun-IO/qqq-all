@@ -11,16 +11,10 @@ import com.kingsrook.qqq.backend.module.filesystem.s3.model.metadata.S3BackendMe
 /** S3 metadata with an explicit endpoint for MinIO. */
 public final class MinioBackendMetaData extends S3BackendMetaData
 {
-   private final String endpoint;
-
    public MinioBackendMetaData(String endpoint)
    {
-      this.endpoint = endpoint;
+      setEndpoint(endpoint);
+      setPathStyleAccess(true);
       setBackendType(MinioBackendModule.class);
-   }
-
-   public String getEndpoint()
-   {
-      return endpoint;
    }
 }
