@@ -51,6 +51,11 @@
    <!-- One versionless dependency per artifact the BOM manages, so resolving this -->
    <!-- module's test classpath resolves each of them. StackBomTest fails if one is missing. -->
    <dependencies>
+      <dependency>
+         <groupId>com.google.guava</groupId>
+         <artifactId>guava</artifactId>
+         <scope>test</scope>
+      </dependency>
       <!-- QQQ modules, qqq-esb, and qqq-frontend-next (from qqq-bom-pom) -->
       <dependency>
          <groupId>com.kingsrook.qqq</groupId>
