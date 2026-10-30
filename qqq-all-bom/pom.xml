@@ -37,6 +37,7 @@
       <h2.version>2.4.240</h2.version>
       <artemis.version>2.57.0</artemis.version>
       <rabbitmq-jms.version>3.9.0</rabbitmq-jms.version>
+      <guava.version>33.7.2-jre</guava.version>
    </properties>
 
    <profiles>
@@ -79,6 +80,12 @@
 
    <dependencyManagement>
       <dependencies>
+         <!-- Keep authentication and Google clients on the fixed Guava runtime. -->
+         <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>${guava.version}</version>
+         </dependency>
          <!-- QQQ modules and qqq-esb. -->
          <dependency>
             <groupId>com.kingsrook.qqq</groupId>
