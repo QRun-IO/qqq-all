@@ -9,7 +9,9 @@ package com.kingsrook.qqq.all;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import com.kingsrook.qqq.backend.core.actions.permissions.PermissionsHelper;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
+import com.kingsrook.qqq.backend.core.model.metadata.security.QSecurityKeyType;
 import com.kingsrook.qqq.backend.core.model.metadata.permissions.PermissionLevel;
 import com.kingsrook.qqq.backend.core.model.metadata.permissions.QPermissionRules;
 import com.kingsrook.qqq.backend.core.model.session.QSession;
@@ -54,7 +56,7 @@ public class DemoUsers implements QAuthenticationModuleCustomizerInterface
    public void customizeSession(QInstance instance, QSession session, Map<String, Object> context)
    {
       session.withPermissions("apiCatalog.read", "demoNote.read");
-      Boolean admin = ADMIN_SESSION.equals(session.getUuid());
+      Boolean admin = ADMIN_SESSION.equals(session.getUuid()) || EnterpriseFeatures.isEnabled();
       String name = admin ? "Admin" : "Demo User";
       String userId = admin ? "core:admin" : "core:demo";
       session.getUser().setIdReference(userId);
@@ -82,6 +84,21 @@ public class DemoUsers implements QAuthenticationModuleCustomizerInterface
          for(String processName : WEBHOOK_PROCESSES)
          {
             session.withPermission(processName + ".hasAccess");
+         }
+      }
+      if(EnterpriseFeatures.isEnabled())
+      {
+         //////////////////////////////////////////////////////////////////////
+         // enterprise test server: every session is an all-access admin, so //
+         // the terminal clients can reach every qbit surface                //
+         //////////////////////////////////////////////////////////////////////
+         session.withPermissions(PermissionsHelper.getAllAvailablePermissionNames(instance));
+         for(QSecurityKeyType keyType : instance.getSecurityKeyTypes().values())
+         {
+            if(keyType.getAllAccessKeyName() != null)
+            {
+               session.withSecurityKeyValue(keyType.getAllAccessKeyName(), true);
+            }
          }
       }
       session.withValueForFrontend("user", new LinkedHashMap<>(Map.of("name", name, "email", userId + "@example.test")));

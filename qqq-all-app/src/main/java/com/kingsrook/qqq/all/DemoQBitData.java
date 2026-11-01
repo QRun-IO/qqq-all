@@ -34,6 +34,18 @@ final class DemoQBitData
       "redirect_state", "user", "role", "permission", "role_permission_int", "user_role_int",
       "user_permission_int");
 
+   /** H2 (MySQL mode) keywords that qbit tables use as column or table names. */
+   private static final Set<String> H2_RESERVED_WORDS = Set.of("VALUE", "KEY", "VALUES", "USER", "ORDER", "GROUP",
+      "LIMIT", "OFFSET", "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND", "ROW", "ROWS", "END", "FROM", "TO",
+      "ALL", "AND", "OR", "NOT", "NULL", "TRUE", "FALSE", "IF", "IN", "IS", "AS", "ON", "BY", "SELECT", "WHERE",
+      "TABLE", "INTERVAL", "DEFAULT", "CHECK", "CONSTRAINT", "PRIMARY", "UNIQUE", "FOREIGN", "INDEX", "JOIN",
+      "LEFT", "RIGHT", "INNER", "OUTER", "CROSS", "NATURAL", "UNION", "EXCEPT", "INTERSECT", "MINUS", "DISTINCT",
+      "HAVING", "QUALIFY", "WINDOW", "CASE", "WHEN", "THEN", "ELSE", "FETCH", "FOR", "WITH", "CURRENT_DATE",
+      "CURRENT_TIME", "CURRENT_TIMESTAMP", "CURRENT_USER", "LOCALTIME", "LOCALTIMESTAMP", "ARRAY", "BETWEEN",
+      "EXISTS", "LIKE", "ILIKE", "REGEXP", "SET", "UNKNOWN", "USING", "TOP", "SYSDATE", "SYSTIME", "TODAY",
+      "_ROWID_", "ROWNUM", "LISTAGG", "INTERSECTS", "ANY", "SOME", "ASYMMETRIC", "SYMMETRIC", "AUTHORIZATION",
+      "CURRENT_CATALOG", "CURRENT_SCHEMA", "CURRENT_PATH", "CURRENT_ROLE", "LATERAL", "UESCAPE");
+
    private DemoQBitData()
    {
    }
@@ -231,7 +243,7 @@ final class DemoQBitData
       {
          throw new IllegalArgumentException("Unsupported demo schema identifier");
       }
-      if("value".equalsIgnoreCase(value) || "key".equalsIgnoreCase(value))
+      if(H2_RESERVED_WORDS.contains(value.toUpperCase()))
       {
          return "`" + value + "`";
       }
