@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +61,7 @@ import com.kingsrook.qbits.qacapture.QaCaptureQBitProducer;
 import com.kingsrook.qbits.quicksearch.QuickSearchQBitConfig;
 import com.kingsrook.qbits.quicksearch.QuickSearchQBitProducer;
 import com.kingsrook.qbits.quicksearch.SearchableFieldConfig;
+import com.kingsrook.qbits.quicksearch.SearchableTableConfig;
 import com.kingsrook.qbits.redis.RedisConnectionConfig;
 import com.kingsrook.qbits.redis.RedisQBitConfig;
 import com.kingsrook.qbits.redis.RedisQBitProducer;
@@ -85,6 +87,8 @@ import com.kingsrook.qqq.backend.core.jobs.DurableJobsMetaDataProvider;
 import com.kingsrook.qqq.backend.core.model.audits.AuditsMetaDataProvider;
 import com.kingsrook.qqq.backend.core.model.metadata.QBackendMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
+import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
+import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
 import com.kingsrook.qqq.backend.core.model.metadata.processes.QBackendStepMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.processes.QStepMetaData;
@@ -369,8 +373,12 @@ final class EnterpriseFeatures
                .withAllowPlaintextCredentials(true)
                .withSchedulerName(schedulerName)
                .withTableMetaDataCustomizer(tableCustomizer)
-               .withSearchableTable("customer", List.of(new SearchableFieldConfig("name"), new SearchableFieldConfig("email")))
-               .withSearchableTable("order", List.of(new SearchableFieldConfig("orderNo"), new SearchableFieldConfig("status")));
+               // new tables are queued for their first build, which the basepull runs: keep it quick
+               .withBasepullRepeatSeconds(60);
+            for(SearchableTableConfig table : searchableTables(i))
+            {
+               searchConfig.withSearchableTable(table);
+            }
             new QuickSearchQBitProducer().withConfig(searchConfig).produce(i).addSelfToInstance(i);
          });
       }
@@ -481,6 +489,72 @@ final class EnterpriseFeatures
             table.setAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD));
          }
       }
+   }
+
+
+
+   /** Text fields worth searching besides a table's record label fields. */
+   private static final Set<String> SEARCHABLE_FIELD_NAMES = Set.of("name", "label", "title", "description", "email",
+      "firstName", "lastName", "city", "state", "country", "code", "orderNo", "status");
+
+   /** The backends of the demo and sample data (QBit admin tables live on h2 too, and are left out). */
+   private static final Set<String> SAMPLE_BACKENDS = Set.of("rdbms", "memory");
+   private static final List<String> DEMO_TABLES = List.of("customer", "order", "address", "shipping_country",
+      "shipping_stateProvince", "shipping_city");
+
+   /*******************************************************************************
+    ** Quick Search registrations for the demo tables and every visible sample-app
+    ** table with a record label: the label fields plus the obvious text fields,
+    ** STRING fields only (OpenSearch indexes them as searchable text; dates,
+    ** numbers and booleans stay out). Self-priming creates their index rows and
+    ** queues each for its first build.
+    *******************************************************************************/
+   static List<SearchableTableConfig> searchableTables(QInstance instance)
+   {
+      List<SearchableTableConfig> tables = new ArrayList<>();
+      for(QTableMetaData table : instance.getTables().values())
+      {
+         boolean demo = DEMO_TABLES.contains(table.getName());
+         boolean sample = SAMPLE_BACKENDS.contains(table.getBackendName()) && !table.getIsHidden()
+            && table.getRecordLabelFields() != null && !table.getRecordLabelFields().isEmpty();
+         if(!demo && !sample)
+         {
+            continue;
+         }
+         Set<String> names = new LinkedHashSet<>();
+         for(String labelField : Objects.requireNonNullElse(table.getRecordLabelFields(), List.<String>of()))
+         {
+            names.add(labelField);
+         }
+         names.addAll(SEARCHABLE_FIELD_NAMES);
+         List<SearchableFieldConfig> fields = new ArrayList<>();
+         for(String name : names)
+         {
+            QFieldMetaData field = table.getFields().get(name);
+            if(field != null && field.getType() == QFieldType.STRING)
+            {
+               fields.add(new SearchableFieldConfig(name).withWeight(Objects.requireNonNullElse(table.getRecordLabelFields(), List.<String>of()).contains(name) ? 3 : 1));
+            }
+         }
+         if(fields.isEmpty())
+         {
+            continue;
+         }
+         SearchableTableConfig config = new SearchableTableConfig(table.getName(), fields);
+         if((table.getRecordLabelFields() == null || table.getRecordLabelFields().isEmpty()) && fields.stream().anyMatch(f -> "name".equals(f.getFieldName())))
+         {
+            ///////////////////////////////////////////////////////////////
+            // label hits by name where the table itself has no label    //
+            ///////////////////////////////////////////////////////////////
+            config.withRecordLabelFormat("%s", "name");
+         }
+         if(!table.getFields().containsKey("modifyDate"))
+         {
+            config.withBasepullTimestampField(null);
+         }
+         tables.add(config);
+      }
+      return (tables);
    }
 
 
