@@ -26,9 +26,9 @@ public final class ProfileLauncher
    static String profile(Map<String, String> environment)
    {
       String selected = environment.getOrDefault("QQQ_ALL_PROFILE", "core");
-      if(!"core".equals(selected) && !"full".equals(selected))
+      if(!"core".equals(selected) && !"full".equals(selected) && !EnterpriseFeatures.PROFILE.equals(selected))
       {
-         throw new IllegalArgumentException("QQQ_ALL_PROFILE must be core or full");
+         throw new IllegalArgumentException("QQQ_ALL_PROFILE must be core, full or enterprise");
       }
       return selected;
    }
@@ -38,7 +38,7 @@ public final class ProfileLauncher
       String selected = profile(environment);
       Path dataDirectory = Path.of(environment.getOrDefault("QQQ_ALL_DATA_DIR", "./data"));
       Integer port = Integer.valueOf(environment.getOrDefault("QQQ_ALL_PORT", "8080"));
-      if("core".equals(selected))
+      if("core".equals(selected) || EnterpriseFeatures.PROFILE.equals(selected))
       {
          CoreRuntime.launch(dataDirectory, port, environment.getOrDefault("QQQ_ALL_BIND_HOST", "127.0.0.1"));
          return;

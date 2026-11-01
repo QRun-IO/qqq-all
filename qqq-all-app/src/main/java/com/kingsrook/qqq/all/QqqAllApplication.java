@@ -7,6 +7,7 @@
 package com.kingsrook.qqq.all;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import com.kingsrook.qqq.backend.core.actions.processes.BackendStep;
@@ -110,12 +111,13 @@ public final class QqqAllApplication extends AbstractQQQApplication
 
       instance.addTable(new QTableMetaData().withName("customer").withLabel("Customer")
          .withBackendName("h2").withPrimaryKeyField("id")
+         .withRecordLabelFormat("%s").withRecordLabelFields("name")
          .withField(new QFieldMetaData("id", QFieldType.INTEGER))
          .withField(new QFieldMetaData("name", QFieldType.STRING))
          .withField(new QFieldMetaData("email", QFieldType.STRING)));
       instance.addTable(new QTableMetaData().withName("order").withLabel("Order")
          .withBackendName("h2").withBackendDetails(new RDBMSTableBackendDetails().withTableName("orders"))
-         .withPrimaryKeyField("id")
+         .withPrimaryKeyField("id").withRecordLabelFormat("%s").withRecordLabelFields("orderNo")
          .withField(new QFieldMetaData("id", QFieldType.INTEGER))
          .withField(new QFieldMetaData("orderNo", QFieldType.STRING).withBackendName("order_no"))
          .withField(new QFieldMetaData("customerId", QFieldType.INTEGER).withBackendName("customer_id"))
@@ -156,12 +158,16 @@ public final class QqqAllApplication extends AbstractQQQApplication
       new EsbJavalinMetaDataProducer().produce(instance);
 
       instance.withSupplementalMetaData(new HealthCheckMetaData().withEnabled(true)
-         .withEndpointPath("/health").withIndicators(List.of(new MemoryHealthIndicator().withThreshold(99))));
+         .withEndpointPath("/health").withIndicators(new ArrayList<>(List.of(new MemoryHealthIndicator().withThreshold(99)))));
       QJavalinMetaData.ofOrWithNew(instance)
          .withAdditionalRouteProviderReference(new QCodeReference(JavalinHealthRouteProvider.class));
       if(includeDemoQbits)
       {
          DemoQBits.addCore(instance, "h2");
+         if(EnterpriseFeatures.isEnabled())
+         {
+            EnterpriseFeatures.add(instance, "h2", httpPort);
+         }
          DemoUsers.protectDemoTables(instance);
          QJavalinMetaData.ofOrWithNew(instance)
             .withAdditionalRouteProviderReference(new QCodeReference(DemoOrderWebhookReceiver.class));

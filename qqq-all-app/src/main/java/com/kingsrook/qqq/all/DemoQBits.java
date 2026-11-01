@@ -11,6 +11,7 @@ import com.kingsrook.qbits.customizabletableviews.CustomizableTableViewsQBitConf
 import com.kingsrook.qbits.customizabletableviews.CustomizableTableViewsQBitProducer;
 import com.kingsrook.qbits.quicksearch.QuickSearchQBitConfig;
 import com.kingsrook.qbits.quicksearch.QuickSearchQBitProducer;
+import com.kingsrook.qbits.quicksearch.QuickSearchStartupMode;
 import com.kingsrook.qbits.quicksearch.SearchableFieldConfig;
 import com.kingsrook.qbits.sftpdataintegration.SFTPDataIntegrationQBitConfig;
 import com.kingsrook.qbits.sftpdataintegration.SFTPDataIntegrationQBitProducer;
@@ -34,8 +35,11 @@ import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
 import com.kingsrook.qqq.backend.core.model.metadata.qbits.ProvidedOrSuppliedTableConfig;
-import com.kingsrook.qqq.backend.core.model.metadata.qbits.QBitMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.tables.QTableMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QBackendStepMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QFrontendStepMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QProcessMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QStepMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValue;
 import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValueSource;
 import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValueSourceType;
@@ -111,6 +115,8 @@ final class DemoQBits
          .withCategory(WebhookEventCategory.STORE).withTableName("order")
          .withCustomizer(new QCodeReference(DemoOrderWebhookContent.class)));
 
+      moveTestEventFormAfterPreview(instance);
+
       new WorkflowsQBitProducer()
          .withQBitConfig(new WorkflowsQBitConfig().withTableMetaDataCustomizer(tableCustomizer))
          .produce(instance).addSelfToInstance(instance);
@@ -156,11 +162,14 @@ final class DemoQBits
          .withOpensearchUsername(settings.get("OPENSEARCH_USER"))
          .withOpensearchPassword(settings.get("OPENSEARCH_PASSWORD"))
          .withUseSsl(Boolean.parseBoolean(settings.getOrDefault("OPENSEARCH_SSL", "false")))
+         // quick search 1.x connects at startup unless degraded; 0.2.x did not (the enterprise profile bumped it)
+         .withStartupMode(QuickSearchStartupMode.DEGRADED)
          .withSearchableTable("customer", List.of(new SearchableFieldConfig("name"),
             new SearchableFieldConfig("email")));
+      ////////////////////////////////////////////////////////////////////
+      // quick search 1.x registers its own QBitMetaData when produced   //
+      ////////////////////////////////////////////////////////////////////
       new QuickSearchQBitProducer().withConfig(searchConfig).produce(instance);
-      instance.addQBit(new QBitMetaData().withGroupId("com.kingsrook.qbits")
-         .withArtifactId("quick-search").withVersion("0.2.1-SNAPSHOT").withConfig(searchConfig));
 
       new SavedBulkLoadProfileMetaDataProvider().defineAll(instance, "postgres", null);
       new SavedReportsMetaDataProvider().defineAll(instance, "postgres", "sftp", null);
@@ -180,5 +189,28 @@ final class DemoQBits
             }
             return table;
          })).produce(instance, "demo-import");
+   }
+
+
+   /**
+    * qbit-webhooks 0.x puts SendTestEventToWebhook's input form before the
+    * preview step, so the records chosen at init are lost and the run fails
+    * with "No records were selected" (QRun-IO/qqq#1361; fixed on qbit-webhooks
+    * fix/test-event-records). Until a release carries it, move the form after
+    * the first backend step here.
+    */
+   static void moveTestEventFormAfterPreview(QInstance instance)
+   {
+      QProcessMetaData process = instance.getProcess("SendTestEventToWebhook");
+      if(process == null || process.getStepList() == null || process.getStepList().size() < 2)
+      {
+         return;
+      }
+      List<QStepMetaData> steps = process.getStepList();
+      if(steps.get(0) instanceof QFrontendStepMetaData form && "input".equals(form.getName()) && steps.get(1) instanceof QBackendStepMetaData)
+      {
+         steps.remove(0);
+         steps.add(1, form);
+      }
    }
 }
