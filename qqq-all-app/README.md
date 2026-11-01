@@ -108,6 +108,10 @@ For an existing volume, apply the idempotent grants and then sign in again:
 COMPOSE_PROFILES=full docker compose exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < infra/postgres/05-runtime-demo-permissions.sql
 ```
 
+Quick Search 1.x protects `quickSearchFullReindex` and its other admin processes with
+`quick_search_admin.hasAccess`; fresh volumes grant it to the admin role through
+`infra/postgres/06-quick-search-permissions.sql`. Apply that file the same way on an existing volume.
+
 `mvn -pl qqq-all-app -am verify` includes native local API, calculation/permission,
 memory restart, and packaged-JAR checks. `scripts/run_core_smoke.py` and
 `scripts/run_full_smoke.py` verify these routes with actual Admin and restricted
