@@ -51,6 +51,8 @@ import com.kingsrook.qqq.backend.core.model.savedreports.SavedReportsMetaDataPro
 import com.kingsrook.qqq.backend.core.model.scheduledjobs.ScheduledJobsMetaDataProvider;
 import com.kingsrook.qqq.backend.core.model.common.TimeZonePossibleValueSourceMetaDataProvider;
 import com.kingsrook.qqq.backend.core.model.metadata.scheduleing.simple.SimpleSchedulerMetaData;
+import com.kingsrook.qqq.backend.module.filesystem.base.model.metadata.Cardinality;
+import com.kingsrook.qqq.backend.module.filesystem.sftp.model.metadata.SFTPTableBackendDetails;
 import com.kingsrook.qqq.backend.module.rdbms.model.metadata.RDBMSTableBackendDetails;
 
 /** Registers the locally usable qbits against the demo's relational backend. */
@@ -173,6 +175,12 @@ final class DemoQBits
 
       new SavedBulkLoadProfileMetaDataProvider().defineAll(instance, "postgres", null);
       new SavedReportsMetaDataProvider().defineAll(instance, "postgres", "sftp", null);
+      ///////////////////////////////////////////////////////////////////////////
+      // rendered reports are files, one per record, on the SFTP server: core   //
+      // now refuses a filesystem table without backend details (qqq#1364)      //
+      ///////////////////////////////////////////////////////////////////////////
+      instance.getTable("reportStorage").setBackendDetails(new SFTPTableBackendDetails().withBasePath("reportStorage")
+         .withCardinality(Cardinality.ONE).withFileNameFieldName("reference").withContentsFieldName("contents"));
       new SFTPDataIntegrationQBitProducer().withSftpDataIntegrationQBitConfig(new SFTPDataIntegrationQBitConfig()
          .withSourceFileTableConfig(ProvidedOrSuppliedTableConfig.provideTableUsingBackendNamed("sftp"))
          .withDestinationFileTableConfig(ProvidedOrSuppliedTableConfig.provideTableUsingBackendNamed("sftp"))
