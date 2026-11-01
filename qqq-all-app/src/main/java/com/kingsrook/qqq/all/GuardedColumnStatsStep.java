@@ -29,6 +29,10 @@ import com.kingsrook.qqq.backend.core.processes.implementations.columnstats.Colu
  * field-access policy to them instead of withholding table-less records.
  * The process shape belongs in qqq core (QRun-IO/qqq#1367); this is the host's
  * safe check until then.
+ *
+ * TODO(QRun-IO/qqq#1367): when core's ColumnStatsStep refuses fields the caller
+ * cannot read in full and tags its result records with the source table, delete
+ * this class and the code swap in EnterpriseFeatures.enableColumnStatistics.
  */
 public class GuardedColumnStatsStep extends ColumnStatsStep
 {
