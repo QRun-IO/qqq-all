@@ -85,6 +85,8 @@ import com.kingsrook.qqq.backend.core.jobs.DurableJobsMetaDataProvider;
 import com.kingsrook.qqq.backend.core.model.audits.AuditsMetaDataProvider;
 import com.kingsrook.qqq.backend.core.model.metadata.QBackendMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
+import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
+import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.tables.Capability;
 import com.kingsrook.qqq.backend.core.modules.backend.implementations.memory.MemoryBackendModule;
 import com.kingsrook.qqq.backend.core.processes.implementations.columnstats.ColumnStatsStep;
@@ -432,6 +434,26 @@ final class EnterpriseFeatures
       {
          instance.addProcess(ColumnStatsStep.getProcessMetaData());
       }
+
+      ////////////////////////////////////////////////////////////////////////
+      // the statistics records the process returns belong to no table, and //
+      // the UI API withholds such process records once any field has a     //
+      // restricted access tier (secured-data, the sample's secret fields). //
+      // Give the process a hidden, unrestricted owner table so the counts  //
+      // reach the caller (QRun-IO/qqq#1367).                              //
+      ////////////////////////////////////////////////////////////////////////
+      String ownerTable = "columnStatsResult";
+      if(instance.getTable(ownerTable) == null)
+      {
+         if(instance.getBackend("columnStatsMemory") == null)
+         {
+            instance.addBackend(new QBackendMetaData().withName("columnStatsMemory").withBackendType(MemoryBackendModule.class));
+         }
+         instance.addTable(new QTableMetaData().withName(ownerTable).withLabel("Column Statistics").withIsHidden(true)
+            .withBackendName("columnStatsMemory").withPrimaryKeyField("id")
+            .withField(new QFieldMetaData("id", QFieldType.INTEGER)));
+      }
+      instance.getProcess(ColumnStatsStep.getProcessMetaData().getName()).setTableName(ownerTable);
       for(QBackendMetaData backend : instance.getBackends().values())
       {
          if(backend instanceof RDBMSBackendMetaData || new MemoryBackendModule().getBackendType().equals(backend.getBackendType()))
