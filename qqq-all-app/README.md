@@ -15,6 +15,18 @@ Core uses mock authentication. The `sessionId` cookie selects the two fixed demo
 
 The core demo seeds a customer table view, a shipping address linked to the geo country/state/city tables, and an order review workflow. The `RunRecordWorkflow` process can run that workflow against an order; `syncOrder` writes a process trace after an order event. It also seeds an active `orderStored` webhook subscription to its receiver at `/demo/order-webhook`. Insert an order as Admin, run `SendWebhookEvent` as Admin, and inspect `/demo/order-webhook-receipts` to see the delivered payload. Demo User can read webhook records but cannot edit their configuration or invoke the delivery process. The receiver is available only in the core profile, which Compose publishes on host loopback.
 
+## Enterprise profile: the assistant
+
+`QQQ_ALL_PROFILE=enterprise` (the terminal-client test server, started by qqq-cli's
+`scripts/enterprise-server.sh`) installs qbit-assistant with two model provider rows, reconciled at every
+start: **Anthropic (Claude)** (key variable `ANTHROPIC_API_KEY`; only the name is stored) and **Local
+Ollama** (OpenAI-compatible, kind OLLAMA, `QQQ_ASSISTANT_OLLAMA_URL` default `http://127.0.0.1:11434/v1`,
+model `QQQ_ASSISTANT_OLLAMA_MODEL` default `llama3.3:70b-instruct-q4_K_M`, no key). The default is
+Anthropic when `ANTHROPIC_API_KEY` is set, else Ollama when it answers and lists the model, else neither
+(the assistant reports `NOT_CONFIGURED` with what to configure). Every enterprise session holds
+`assistant.hasAccess` and `assistant.admin`. A turn may take 900 s and one Ollama call 600 s, for a local
+70B model.
+
 ## Full profile
 
 Set `QQQ_ALL_PROFILE=full` to use external services. The full profile requires an explicit `QQQ_ALL_BIND_HOST`; use `127.0.0.1` for local-only access or deliberately set another interface when a reverse proxy needs it. `QQQ_ALL_PORT` defaults to `8080`. The full profile replaces core's mock authentication with Keycloak OIDC. It does not start an embedded broker.
