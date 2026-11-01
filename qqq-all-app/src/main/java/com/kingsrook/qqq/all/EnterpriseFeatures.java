@@ -48,6 +48,13 @@ import com.kingsrook.qbits.help.HelpQBitConfig;
 import com.kingsrook.qbits.help.HelpQBitProducer;
 import com.kingsrook.qbits.jobs.JobsQBitConfig;
 import com.kingsrook.qbits.jobs.JobsQBitProducer;
+import com.kingsrook.qbits.objectstorage.ObjectStorageQBitConfig;
+import com.kingsrook.qbits.objectstorage.ObjectStorageQBitProducer;
+import com.kingsrook.qbits.objectstorage.config.AddressingStyle;
+import com.kingsrook.qbits.objectstorage.config.BucketRole;
+import com.kingsrook.qbits.objectstorage.config.ProviderType;
+import com.kingsrook.qbits.objectstorage.config.StorageBucketConfig;
+import com.kingsrook.qbits.objectstorage.config.StorageConnectionConfig;
 import com.kingsrook.qbits.qacapture.QaCaptureQBitConfig;
 import com.kingsrook.qbits.qacapture.QaCaptureQBitProducer;
 import com.kingsrook.qbits.quicksearch.QuickSearchQBitConfig;
@@ -76,7 +83,16 @@ import com.kingsrook.qqq.backend.core.health.HealthMetaDataProvider;
 import com.kingsrook.qqq.backend.core.jobs.DurableJobsMetaData;
 import com.kingsrook.qqq.backend.core.jobs.DurableJobsMetaDataProvider;
 import com.kingsrook.qqq.backend.core.model.audits.AuditsMetaDataProvider;
+import com.kingsrook.qqq.backend.core.model.metadata.QBackendMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
+import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QBackendStepMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QStepMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QProcessMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.tables.Capability;
+import com.kingsrook.qqq.backend.core.modules.backend.implementations.memory.MemoryBackendModule;
+import com.kingsrook.qqq.backend.core.processes.implementations.columnstats.ColumnStatsStep;
+import com.kingsrook.qqq.backend.module.rdbms.model.metadata.RDBMSBackendMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.audits.AuditLevel;
 import com.kingsrook.qqq.backend.core.model.metadata.audits.QAuditRules;
 import com.kingsrook.qqq.backend.core.model.metadata.producers.MetaDataCustomizerInterface;
@@ -246,6 +262,24 @@ final class EnterpriseFeatures
       /////////////////////////
       // qbits               //
       /////////////////////////
+      //////////////////////////////////////////////////////////////////////////
+      // object storage on a local MinIO (enterprise-server.sh starts it):    //
+      // collaboration attachments live in its private "collaboration"       //
+      // bucket. Credentials are references to the server's env only.         //
+      //////////////////////////////////////////////////////////////////////////
+      String s3Endpoint = System.getenv("S3_ENDPOINT");
+      if(s3Endpoint != null && !s3Endpoint.isBlank())
+      {
+         features.put("objectStorage", i -> new ObjectStorageQBitProducer().withQBitConfig(new ObjectStorageQBitConfig()
+            .withBackendName(backendName).withSchedulerName(schedulerName).withAdminApp(true)
+            .withConnection(new StorageConnectionConfig("local").withProviderType(ProviderType.MINIO)
+               .withEndpoint("${env.S3_ENDPOINT}").withRegion("us-east-1").withAddressingStyle(AddressingStyle.PATH)
+               .withAccessKeyRef("${env.S3_ACCESS_KEY}").withSecretKeyRef("${env.S3_SECRET_KEY}"))
+            .withBucket(new StorageBucketConfig("collaboration").withConnection("local")
+               .withBucketName("${env.S3_ATTACHMENTS_BUCKET}").withRole(BucketRole.PRIVATE).withIndexed(false)))
+            .produce(i).addSelfToInstance(i));
+      }
+
       features.put("jobs", i -> new JobsQBitProducer().withQBitConfig(new JobsQBitConfig()
          .withSchedulerName(schedulerName)).produce(i).addSelfToInstance(i));
       features.put("collaboration", i -> new CollaborationQBitProducer().withQBitConfig(new CollaborationQBitConfig()
@@ -376,7 +410,77 @@ final class EnterpriseFeatures
          }
       }
 
+      enableColumnStatistics(instance);
+      auditDataTables(instance);
       addNavigationApps(instance);
+   }
+
+
+
+   /*******************************************************************************
+    ** QQQ turns QUERY_STATS (column statistics: counts, distinct values, min/max
+    ** and averages per field) off on every backend by default. Turn it on for the
+    ** backends whose module can aggregate, RDBMS (H2, SQLite, the sample's
+    ** in-memory H2) and the memory backend, so their tables offer statistics as
+    ** the web UI and the terminal clients expect; filesystem and API backends
+    ** cannot aggregate and stay without it. Tables of those backends that list
+    ** QUERY_STATS as disabled keep it off. The columnStats process that serves
+    ** the statistics is added when the instance lacks it, and runs through
+    ** GuardedColumnStatsStep (only fully readable fields).
+    *******************************************************************************/
+   static void enableColumnStatistics(QInstance instance)
+   {
+      ////////////////////////////////////////////////////////////////////
+      // the UI API serves column statistics through this process       //
+      ////////////////////////////////////////////////////////////////////
+      if(instance.getProcess(ColumnStatsStep.getProcessMetaData().getName()) == null)
+      {
+         instance.addProcess(ColumnStatsStep.getProcessMetaData());
+      }
+
+      ////////////////////////////////////////////////////////////////////////
+      // run it through the guarded step: fields the caller cannot read in  //
+      // full are refused, and the results carry the analysed table so its  //
+      // field-access policy applies (QRun-IO/qqq#1367)                     //
+      ////////////////////////////////////////////////////////////////////////
+      QProcessMetaData process = instance.getProcess(ColumnStatsStep.getProcessMetaData().getName());
+      for(QStepMetaData step : process.getStepList())
+      {
+         if(step instanceof QBackendStepMetaData backendStep && backendStep.getCode() != null
+            && ColumnStatsStep.class.getName().equals(backendStep.getCode().getName()))
+         {
+            backendStep.setCode(new QCodeReference(GuardedColumnStatsStep.class));
+         }
+      }
+      for(QBackendMetaData backend : instance.getBackends().values())
+      {
+         if(backend instanceof RDBMSBackendMetaData || new MemoryBackendModule().getBackendType().equals(backend.getBackendType()))
+         {
+            backend.withCapability(Capability.QUERY_STATS);
+         }
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** Field-level audits on the demo and sample data tables (customer, order and
+    ** address get them with the audits feature), when audits are installed.
+    *******************************************************************************/
+   static void auditDataTables(QInstance instance)
+   {
+      if(instance.getTable("audit") == null)
+      {
+         return;
+      }
+      for(String tableName : List.of("customer", "order", "orderLine", "address", "person", "pet", "petNote", "carrier"))
+      {
+         QTableMetaData table = instance.getTable(tableName);
+         if(table != null && table.getAuditRules() == null)
+         {
+            table.setAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD));
+         }
+      }
    }
 
 
