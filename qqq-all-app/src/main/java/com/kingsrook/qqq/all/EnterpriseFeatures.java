@@ -48,6 +48,13 @@ import com.kingsrook.qbits.help.HelpQBitConfig;
 import com.kingsrook.qbits.help.HelpQBitProducer;
 import com.kingsrook.qbits.jobs.JobsQBitConfig;
 import com.kingsrook.qbits.jobs.JobsQBitProducer;
+import com.kingsrook.qbits.objectstorage.ObjectStorageQBitConfig;
+import com.kingsrook.qbits.objectstorage.ObjectStorageQBitProducer;
+import com.kingsrook.qbits.objectstorage.config.AddressingStyle;
+import com.kingsrook.qbits.objectstorage.config.BucketRole;
+import com.kingsrook.qbits.objectstorage.config.ProviderType;
+import com.kingsrook.qbits.objectstorage.config.StorageBucketConfig;
+import com.kingsrook.qbits.objectstorage.config.StorageConnectionConfig;
 import com.kingsrook.qbits.qacapture.QaCaptureQBitConfig;
 import com.kingsrook.qbits.qacapture.QaCaptureQBitProducer;
 import com.kingsrook.qbits.quicksearch.QuickSearchQBitConfig;
@@ -251,6 +258,24 @@ final class EnterpriseFeatures
       /////////////////////////
       // qbits               //
       /////////////////////////
+      //////////////////////////////////////////////////////////////////////////
+      // object storage on a local MinIO (enterprise-server.sh starts it):    //
+      // collaboration attachments live in its private "collaboration"       //
+      // bucket. Credentials are references to the server's env only.         //
+      //////////////////////////////////////////////////////////////////////////
+      String s3Endpoint = System.getenv("S3_ENDPOINT");
+      if(s3Endpoint != null && !s3Endpoint.isBlank())
+      {
+         features.put("objectStorage", i -> new ObjectStorageQBitProducer().withQBitConfig(new ObjectStorageQBitConfig()
+            .withBackendName(backendName).withSchedulerName(schedulerName).withAdminApp(true)
+            .withConnection(new StorageConnectionConfig("local").withProviderType(ProviderType.MINIO)
+               .withEndpoint("${env.S3_ENDPOINT}").withRegion("us-east-1").withAddressingStyle(AddressingStyle.PATH)
+               .withAccessKeyRef("${env.S3_ACCESS_KEY}").withSecretKeyRef("${env.S3_SECRET_KEY}"))
+            .withBucket(new StorageBucketConfig("collaboration").withConnection("local")
+               .withBucketName("${env.S3_ATTACHMENTS_BUCKET}").withRole(BucketRole.PRIVATE).withIndexed(false)))
+            .produce(i).addSelfToInstance(i));
+      }
+
       features.put("jobs", i -> new JobsQBitProducer().withQBitConfig(new JobsQBitConfig()
          .withSchedulerName(schedulerName)).produce(i).addSelfToInstance(i));
       features.put("collaboration", i -> new CollaborationQBitProducer().withQBitConfig(new CollaborationQBitConfig()
