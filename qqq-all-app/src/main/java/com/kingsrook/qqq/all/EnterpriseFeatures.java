@@ -88,10 +88,6 @@ import com.kingsrook.qqq.backend.core.model.metadata.QBackendMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldMetaData;
-import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
-import com.kingsrook.qqq.backend.core.model.metadata.processes.QBackendStepMetaData;
-import com.kingsrook.qqq.backend.core.model.metadata.processes.QStepMetaData;
-import com.kingsrook.qqq.backend.core.model.metadata.processes.QProcessMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.tables.Capability;
 import com.kingsrook.qqq.backend.core.modules.backend.implementations.memory.MemoryBackendModule;
 import com.kingsrook.qqq.backend.core.processes.implementations.columnstats.ColumnStatsStep;
@@ -431,8 +427,8 @@ final class EnterpriseFeatures
     ** the web UI and the terminal clients expect; filesystem and API backends
     ** cannot aggregate and stay without it. Tables of those backends that list
     ** QUERY_STATS as disabled keep it off. The columnStats process that serves
-    ** the statistics is added when the instance lacks it, and runs through
-    ** GuardedColumnStatsStep (only fully readable fields).
+    ** the statistics is added when the instance lacks it; core guards it by field
+    ** access (QRun-IO/qqq#1367: only fully readable fields, results tagged).
     *******************************************************************************/
    static void enableColumnStatistics(QInstance instance)
    {
@@ -444,20 +440,6 @@ final class EnterpriseFeatures
          instance.addProcess(ColumnStatsStep.getProcessMetaData());
       }
 
-      ////////////////////////////////////////////////////////////////////////
-      // run it through the guarded step: fields the caller cannot read in  //
-      // full are refused, and the results carry the analysed table so its  //
-      // field-access policy applies (QRun-IO/qqq#1367)                     //
-      ////////////////////////////////////////////////////////////////////////
-      QProcessMetaData process = instance.getProcess(ColumnStatsStep.getProcessMetaData().getName());
-      for(QStepMetaData step : process.getStepList())
-      {
-         if(step instanceof QBackendStepMetaData backendStep && backendStep.getCode() != null
-            && ColumnStatsStep.class.getName().equals(backendStep.getCode().getName()))
-         {
-            backendStep.setCode(new QCodeReference(GuardedColumnStatsStep.class));
-         }
-      }
       for(QBackendMetaData backend : instance.getBackends().values())
       {
          if(backend instanceof RDBMSBackendMetaData || new MemoryBackendModule().getBackendType().equals(backend.getBackendType()))
