@@ -93,12 +93,21 @@ public class DemoUsers implements QAuthenticationModuleCustomizerInterface
          // the terminal clients can reach every qbit surface                //
          //////////////////////////////////////////////////////////////////////
          session.withPermissions(PermissionsHelper.getAllAvailablePermissionNames(instance));
+         //////////////////////////////////////////////////////////////////////
+         // permissions some modules check by literal name, outside the      //
+         // table/process permission rules                                   //
+         //////////////////////////////////////////////////////////////////////
+         session.withPermissions("jobs_job.read", "jobs_admin", "data_analysis.admin");
          for(QSecurityKeyType keyType : instance.getSecurityKeyTypes().values())
          {
             if(keyType.getAllAccessKeyName() != null)
             {
                session.withSecurityKeyValue(keyType.getAllAccessKeyName(), true);
             }
+            //////////////////////////////////////////////////////////////////
+            // per-user keys (owner locks of qbit tables) take the user id  //
+            //////////////////////////////////////////////////////////////////
+            session.withSecurityKeyValue(keyType.getName(), userId);
          }
       }
       session.withValueForFrontend("user", new LinkedHashMap<>(Map.of("name", name, "email", userId + "@example.test")));

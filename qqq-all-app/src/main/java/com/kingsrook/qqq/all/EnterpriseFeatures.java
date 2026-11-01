@@ -6,6 +6,8 @@
  */
 package com.kingsrook.qqq.all;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.time.Duration;
@@ -90,6 +92,11 @@ import com.kingsrook.qqq.backend.core.model.savedviews.SavedViewsMetaDataProvide
 import com.kingsrook.qqq.backend.core.model.scripts.ScriptsMetaDataProvider;
 import com.kingsrook.qqq.backend.core.actions.preferences.UserPreferencesKeyValueStoreMetaDataProvider;
 import com.kingsrook.qqq.backend.core.processes.implementations.sharing.SharingMetaDataProvider;
+import com.kingsrook.qqq.backend.core.model.metadata.collaboration.RecordFeature;
+import com.kingsrook.qqq.backend.module.filesystem.base.model.metadata.AbstractFilesystemTableBackendDetails;
+import com.kingsrook.qqq.backend.module.filesystem.base.model.metadata.Cardinality;
+import com.kingsrook.qqq.backend.module.filesystem.local.model.metadata.FilesystemBackendMetaData;
+import com.kingsrook.qqq.backend.module.filesystem.local.model.metadata.FilesystemTableBackendDetails;
 import com.kingsrook.qqq.backend.module.rdbms.model.metadata.RDBMSTableBackendDetails;
 
 
@@ -204,7 +211,20 @@ final class EnterpriseFeatures
          new ScriptsMetaDataProvider().defineAll(i, backendName, enricher);
       });
       features.put("savedViews", i -> new SavedViewsMetaDataProvider().defineAll(i, backendName, enricher));
-      features.put("savedReports", i -> new SavedReportsMetaDataProvider().defineAll(i, backendName, "files", enricher));
+      features.put("savedReports", i ->
+      {
+         new SavedReportsMetaDataProvider().defineAll(i, backendName, "files", enricher);
+         //////////////////////////////////////////////////////////////////
+         // rendered reports are files, one per record, under the files  //
+         // backend (the provider leaves the storage details to the host) //
+         //////////////////////////////////////////////////////////////////
+         QTableMetaData reportStorage = i.getTable("reportStorage");
+         if(reportStorage != null && reportStorage.getBackendDetails() == null)
+         {
+            reportStorage.setBackendDetails(new FilesystemTableBackendDetails().withBasePath("reportStorage").withCardinality(Cardinality.ONE).withFileNameFieldName("reference").withContentsFieldName("contents"));
+         }
+         ensureFilesystemDirectories(i);
+      });
       features.put("bulkLoadProfiles", i -> new SavedBulkLoadProfileMetaDataProvider().defineAll(i, backendName, enricher));
       features.put("sharing", i -> new SharingMetaDataProvider().defineAll(i, null));
       features.put("queryStats", i -> new QueryStatMetaDataProvider().defineAll(i, backendName, enricher));
@@ -222,6 +242,7 @@ final class EnterpriseFeatures
          .withSchedulerName(schedulerName)).produce(i).addSelfToInstance(i));
       features.put("collaboration", i -> new CollaborationQBitProducer().withQBitConfig(new CollaborationQBitConfig()
          .withBackendName(backendName).withSchedulerName(schedulerName).withUiApi(true).withAdminApp(true)
+         .withDefaultFeatures(RecordFeature.values())
          .withFrontendBaseUrl(baseUrl)).produce(i).addSelfToInstance(i));
       features.put("alerts", i -> new AlertsQBitProducer().withQBitConfig(new AlertsQBitConfig()
          .withBackendName(backendName).withSchedulerName(schedulerName)
@@ -396,6 +417,27 @@ final class EnterpriseFeatures
       byPrefix.forEach((prefix, tables) -> admin.withSectionOfChildren(new QAppSection().withName("admin_" + prefix)
          .withLabel(QInstanceEnricher.nameToLabel(prefix)).withIcon(new QIcon("folder")), tables));
       instance.addApp(admin);
+   }
+
+
+
+   /*******************************************************************************
+    ** Filesystem tables (rendered report storage) answer 500 when their directory
+    ** does not exist yet: create each one under the files backend.
+    *******************************************************************************/
+   private static void ensureFilesystemDirectories(QInstance instance) throws Exception
+   {
+      if(!(instance.getBackend("files") instanceof FilesystemBackendMetaData files))
+      {
+         return;
+      }
+      for(QTableMetaData table : instance.getTables().values())
+      {
+         if("files".equals(table.getBackendName()) && table.getBackendDetails() instanceof AbstractFilesystemTableBackendDetails details && details.getBasePath() != null)
+         {
+            Files.createDirectories(Path.of(files.getBasePath(), details.getBasePath()));
+         }
+      }
    }
 
 
