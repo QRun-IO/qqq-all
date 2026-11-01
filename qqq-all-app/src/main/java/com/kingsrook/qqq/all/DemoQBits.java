@@ -11,6 +11,7 @@ import com.kingsrook.qbits.customizabletableviews.CustomizableTableViewsQBitConf
 import com.kingsrook.qbits.customizabletableviews.CustomizableTableViewsQBitProducer;
 import com.kingsrook.qbits.quicksearch.QuickSearchQBitConfig;
 import com.kingsrook.qbits.quicksearch.QuickSearchQBitProducer;
+import com.kingsrook.qbits.quicksearch.QuickSearchStartupMode;
 import com.kingsrook.qbits.quicksearch.SearchableFieldConfig;
 import com.kingsrook.qbits.sftpdataintegration.SFTPDataIntegrationQBitConfig;
 import com.kingsrook.qbits.sftpdataintegration.SFTPDataIntegrationQBitProducer;
@@ -34,7 +35,6 @@ import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
 import com.kingsrook.qqq.backend.core.model.metadata.qbits.ProvidedOrSuppliedTableConfig;
-import com.kingsrook.qqq.backend.core.model.metadata.qbits.QBitMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.tables.QTableMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValue;
 import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValueSource;
@@ -156,11 +156,14 @@ final class DemoQBits
          .withOpensearchUsername(settings.get("OPENSEARCH_USER"))
          .withOpensearchPassword(settings.get("OPENSEARCH_PASSWORD"))
          .withUseSsl(Boolean.parseBoolean(settings.getOrDefault("OPENSEARCH_SSL", "false")))
+         // quick search 1.x connects at startup unless degraded; 0.2.x did not (the enterprise profile bumped it)
+         .withStartupMode(QuickSearchStartupMode.DEGRADED)
          .withSearchableTable("customer", List.of(new SearchableFieldConfig("name"),
             new SearchableFieldConfig("email")));
+      ////////////////////////////////////////////////////////////////////
+      // quick search 1.x registers its own QBitMetaData when produced   //
+      ////////////////////////////////////////////////////////////////////
       new QuickSearchQBitProducer().withConfig(searchConfig).produce(instance);
-      instance.addQBit(new QBitMetaData().withGroupId("com.kingsrook.qbits")
-         .withArtifactId("quick-search").withVersion("0.2.1-SNAPSHOT").withConfig(searchConfig));
 
       new SavedBulkLoadProfileMetaDataProvider().defineAll(instance, "postgres", null);
       new SavedReportsMetaDataProvider().defineAll(instance, "postgres", "sftp", null);
