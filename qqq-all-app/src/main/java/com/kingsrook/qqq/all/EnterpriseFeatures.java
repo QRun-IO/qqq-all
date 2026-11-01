@@ -85,8 +85,10 @@ import com.kingsrook.qqq.backend.core.jobs.DurableJobsMetaDataProvider;
 import com.kingsrook.qqq.backend.core.model.audits.AuditsMetaDataProvider;
 import com.kingsrook.qqq.backend.core.model.metadata.QBackendMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
-import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
-import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.code.QCodeReference;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QBackendStepMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QStepMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QProcessMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.tables.Capability;
 import com.kingsrook.qqq.backend.core.modules.backend.implementations.memory.MemoryBackendModule;
 import com.kingsrook.qqq.backend.core.processes.implementations.columnstats.ColumnStatsStep;
@@ -423,7 +425,8 @@ final class EnterpriseFeatures
     ** the web UI and the terminal clients expect; filesystem and API backends
     ** cannot aggregate and stay without it. Tables of those backends that list
     ** QUERY_STATS as disabled keep it off. The columnStats process that serves
-    ** the statistics is added when the instance lacks it.
+    ** the statistics is added when the instance lacks it, and runs through
+    ** GuardedColumnStatsStep (only fully readable fields).
     *******************************************************************************/
    static void enableColumnStatistics(QInstance instance)
    {
@@ -436,24 +439,19 @@ final class EnterpriseFeatures
       }
 
       ////////////////////////////////////////////////////////////////////////
-      // the statistics records the process returns belong to no table, and //
-      // the UI API withholds such process records once any field has a     //
-      // restricted access tier (secured-data, the sample's secret fields). //
-      // Give the process a hidden, unrestricted owner table so the counts  //
-      // reach the caller (QRun-IO/qqq#1367).                              //
+      // run it through the guarded step: fields the caller cannot read in  //
+      // full are refused, and the results carry the analysed table so its  //
+      // field-access policy applies (QRun-IO/qqq#1367)                     //
       ////////////////////////////////////////////////////////////////////////
-      String ownerTable = "columnStatsResult";
-      if(instance.getTable(ownerTable) == null)
+      QProcessMetaData process = instance.getProcess(ColumnStatsStep.getProcessMetaData().getName());
+      for(QStepMetaData step : process.getStepList())
       {
-         if(instance.getBackend("columnStatsMemory") == null)
+         if(step instanceof QBackendStepMetaData backendStep && backendStep.getCode() != null
+            && ColumnStatsStep.class.getName().equals(backendStep.getCode().getName()))
          {
-            instance.addBackend(new QBackendMetaData().withName("columnStatsMemory").withBackendType(MemoryBackendModule.class));
+            backendStep.setCode(new QCodeReference(GuardedColumnStatsStep.class));
          }
-         instance.addTable(new QTableMetaData().withName(ownerTable).withLabel("Column Statistics").withIsHidden(true)
-            .withBackendName("columnStatsMemory").withPrimaryKeyField("id")
-            .withField(new QFieldMetaData("id", QFieldType.INTEGER)));
       }
-      instance.getProcess(ColumnStatsStep.getProcessMetaData().getName()).setTableName(ownerTable);
       for(QBackendMetaData backend : instance.getBackends().values())
       {
          if(backend instanceof RDBMSBackendMetaData || new MemoryBackendModule().getBackendType().equals(backend.getBackendType()))

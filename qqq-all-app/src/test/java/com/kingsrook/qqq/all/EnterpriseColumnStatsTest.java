@@ -36,7 +36,6 @@ class EnterpriseColumnStatsTest
 
       EnterpriseFeatures.enableColumnStatistics(instance);
       assertNotNull(instance.getProcess("columnStats"));
-      assertNotNull(instance.getTable(instance.getProcess("columnStats").getTableName()));
 
       ///////////////////////////////////////////////////////////////////
       // H2 (customer, order), SQLite (orderLine) and memory (demoNote) //
