@@ -88,32 +88,47 @@ public class DemoUsers implements QAuthenticationModuleCustomizerInterface
       }
       if(EnterpriseFeatures.isEnabled())
       {
-         //////////////////////////////////////////////////////////////////////
-         // enterprise test server: every session is an all-access admin, so //
-         // the terminal clients can reach every qbit surface                //
-         //////////////////////////////////////////////////////////////////////
-         session.withPermissions(PermissionsHelper.getAllAvailablePermissionNames(instance));
-         //////////////////////////////////////////////////////////////////////
-         // permissions some modules check by literal name, outside the      //
-         // table/process permission rules (QRun-IO/qqq#1362)                 //
-         //////////////////////////////////////////////////////////////////////
-         session.withPermissions("jobs_job.read", "jobs_admin", "data_analysis.admin", "assistant.hasAccess", "assistant.admin");
-         for(QSecurityKeyType keyType : instance.getSecurityKeyTypes().values())
-         {
-            if(keyType.getAllAccessKeyName() != null)
-            {
-               session.withSecurityKeyValue(keyType.getAllAccessKeyName(), true);
-            }
-            //////////////////////////////////////////////////////////////////
-            // per-user keys (owner locks of qbit tables) take the user id  //
-            //////////////////////////////////////////////////////////////////
-            session.withSecurityKeyValue(keyType.getName(), userId);
-         }
+         grantEnterpriseAccess(instance, session, userId);
       }
-      session.withValueForFrontend("user", new LinkedHashMap<>(Map.of("name", name, "email", userId + "@example.test")));
       if(EnterpriseFeatures.isEnabled())
       {
          EnterpriseSessions.record(session);
+      }
+   }
+
+
+   /**
+    * The enterprise test server: every session is an all-access admin, so the
+    * terminal clients can reach every qbit surface.
+    */
+   static void grantEnterpriseAccess(QInstance instance, QSession session, String userId)
+   {
+      //////////////////////////////////////////////////////////////////////
+      // enterprise test server: every session is an all-access admin, so //
+      // the terminal clients can reach every qbit surface                //
+      //////////////////////////////////////////////////////////////////////
+      session.withPermissions(PermissionsHelper.getAllAvailablePermissionNames(instance));
+      //////////////////////////////////////////////////////////////////////
+      // permissions some modules check by literal name, outside the      //
+      // table/process permission rules (QRun-IO/qqq#1362)                 //
+      //////////////////////////////////////////////////////////////////////
+      session.withPermissions("jobs_job.read", "jobs_admin", "data_analysis.admin", "assistant.hasAccess", "assistant.admin");
+      //////////////////////////////////////////////////////////////////////
+      // qbit-collaboration's custom checkers (Custom Fields, tags, the   //
+      // admin tables) test these names; without them the Custom Fields  //
+      // table answered 403 "This needs collaboration.view." (#47)        //
+      //////////////////////////////////////////////////////////////////////
+      session.withPermissions("collaboration.view", "collaboration.admin", "collaboration.fields.manage", "collaboration.tags.manage");
+      for(QSecurityKeyType keyType : instance.getSecurityKeyTypes().values())
+      {
+         if(keyType.getAllAccessKeyName() != null)
+         {
+            session.withSecurityKeyValue(keyType.getAllAccessKeyName(), true);
+         }
+         //////////////////////////////////////////////////////////////////
+         // per-user keys (owner locks of qbit tables) take the user id  //
+         //////////////////////////////////////////////////////////////////
+         session.withSecurityKeyValue(keyType.getName(), userId);
       }
    }
 }
