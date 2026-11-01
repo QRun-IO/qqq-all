@@ -90,6 +90,7 @@ public class DemoUsers implements QAuthenticationModuleCustomizerInterface
       {
          grantEnterpriseAccess(instance, session, userId);
       }
+      session.withValueForFrontend("user", new LinkedHashMap<>(Map.of("name", name, "email", userId + "@example.test")));
       if(EnterpriseFeatures.isEnabled())
       {
          EnterpriseSessions.record(session);

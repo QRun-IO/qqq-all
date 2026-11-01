@@ -7,6 +7,7 @@
 package com.kingsrook.qqq.all;
 
 import java.nio.file.Path;
+import java.util.Map;
 import com.kingsrook.qbits.collaboration.customfields.FieldSecurity;
 import com.kingsrook.qqq.backend.core.context.QContext;
 import com.kingsrook.qqq.backend.core.exceptions.QPermissionDeniedException;
@@ -14,10 +15,12 @@ import com.kingsrook.qqq.backend.core.model.actions.tables.insert.InsertInput;
 import com.kingsrook.qqq.backend.core.model.actions.tables.query.QueryInput;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
 import com.kingsrook.qqq.backend.core.model.session.QSession;
+import com.kingsrook.qqq.backend.core.model.session.QUser;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** The enterprise admin passes qbit-collaboration's Custom Fields checker (qqq-all#47). */
@@ -45,5 +48,16 @@ class EnterpriseAccessTest
       QContext.init(instance, admin);
       assertDoesNotThrow(() -> new FieldSecurity().checkPermissionsThrowing(new QueryInput("collaboration_field_definition"), null));
       assertDoesNotThrow(() -> new FieldSecurity().checkPermissionsThrowing(new InsertInput("collaboration_field_definition"), null));
+   }
+
+   @Test
+   void customizedSessionsStillCarryTheUserForTheFrontend() throws Exception
+   {
+      QInstance instance = new QqqAllApplication(dataDirectory, "tcp://127.0.0.1:61616").defineQInstance();
+      QSession session = new QSession();
+      session.setUuid(DemoUsers.ADMIN_SESSION);
+      session.setUser(new QUser());
+      new DemoUsers().customizeSession(instance, session, Map.of());
+      assertEquals("Admin", ((Map<?, ?>) session.getValuesForFrontend().get("user")).get("name"));
    }
 }
