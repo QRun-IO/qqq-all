@@ -21,6 +21,10 @@ import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
 import com.kingsrook.qqq.backend.core.model.metadata.permissions.PermissionLevel;
 import com.kingsrook.qqq.backend.core.model.metadata.permissions.QPermissionRules;
 import com.kingsrook.qqq.backend.core.model.metadata.processes.QBackendStepMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QFrontendComponentMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QFrontendStepMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QComponentType;
+import com.kingsrook.qqq.backend.core.model.metadata.help.QHelpContent;
 import com.kingsrook.qqq.backend.core.model.metadata.processes.QFunctionInputMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.processes.QFunctionOutputMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.processes.QProcessMetaData;
@@ -62,13 +66,25 @@ final class DemoRuntimeFeatures
       instance.withRuntimeService(new QCodeReference(TransientNotesService.class));
       instance.addProcess(new QProcessMetaData().withName("calculateOrderTotal").withLabel("Calculate Order Total (JavaScript)")
          .withPermissionRules(new QPermissionRules().withLevel(PermissionLevel.HAS_ACCESS_PERMISSION))
+         // the inputs as a form, so interactive clients ask for them (QRun-IO/qqq-all#45)
+         .withStep(new QFrontendStepMetaData().withName("input").withLabel("Order line")
+            .withComponent(new QFrontendComponentMetaData().withType(QComponentType.EDIT_FORM))
+            .withFormField(new QFieldMetaData("quantity", QFieldType.INTEGER).withLabel("Quantity").withIsRequired(true)
+               .withHelpContent(new QHelpContent("1 to 1000")))
+            .withFormField(new QFieldMetaData("unitPriceCents", QFieldType.INTEGER).withLabel("Unit price (cents)").withIsRequired(true)
+               .withHelpContent(new QHelpContent("0 to 1000000"))))
          .withStep(new QBackendStepMetaData().withName("calculate")
             .withCode(new QCodeReference(CalculateOrderTotalStep.class))
             .withInputData(new QFunctionInputMetaData().withFieldList(List.of(
                new QFieldMetaData("quantity", QFieldType.INTEGER),
                new QFieldMetaData("unitPriceCents", QFieldType.INTEGER))))
             .withOutputMetaData(new QFunctionOutputMetaData().withFieldList(List.of(
-               new QFieldMetaData("totalCents", QFieldType.INTEGER))))));
+               new QFieldMetaData("totalCents", QFieldType.INTEGER)))))
+         .withStep(new QFrontendStepMetaData().withName("result").withLabel("Total")
+            .withComponent(new QFrontendComponentMetaData().withType(QComponentType.VIEW_FORM))
+            .withViewField(new QFieldMetaData("quantity", QFieldType.INTEGER).withLabel("Quantity"))
+            .withViewField(new QFieldMetaData("unitPriceCents", QFieldType.INTEGER).withLabel("Unit price (cents)"))
+            .withViewField(new QFieldMetaData("totalCents", QFieldType.INTEGER).withLabel("Total (cents)"))));
       QJavalinMetaData.ofOrWithNew(instance).withAdditionalRouteProviderReference(new QCodeReference(DemoCatalogRoutes.class));
    }
 

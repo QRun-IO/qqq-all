@@ -36,6 +36,10 @@ import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.fields.QFieldType;
 import com.kingsrook.qqq.backend.core.model.metadata.qbits.ProvidedOrSuppliedTableConfig;
 import com.kingsrook.qqq.backend.core.model.metadata.tables.QTableMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QBackendStepMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QFrontendStepMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QProcessMetaData;
+import com.kingsrook.qqq.backend.core.model.metadata.processes.QStepMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValue;
 import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValueSource;
 import com.kingsrook.qqq.backend.core.model.metadata.possiblevalues.QPossibleValueSourceType;
@@ -111,6 +115,8 @@ final class DemoQBits
          .withCategory(WebhookEventCategory.STORE).withTableName("order")
          .withCustomizer(new QCodeReference(DemoOrderWebhookContent.class)));
 
+      moveTestEventFormAfterPreview(instance);
+
       new WorkflowsQBitProducer()
          .withQBitConfig(new WorkflowsQBitConfig().withTableMetaDataCustomizer(tableCustomizer))
          .produce(instance).addSelfToInstance(instance);
@@ -183,5 +189,28 @@ final class DemoQBits
             }
             return table;
          })).produce(instance, "demo-import");
+   }
+
+
+   /**
+    * qbit-webhooks 0.x puts SendTestEventToWebhook's input form before the
+    * preview step, so the records chosen at init are lost and the run fails
+    * with "No records were selected" (QRun-IO/qqq#1361; fixed on qbit-webhooks
+    * fix/test-event-records). Until a release carries it, move the form after
+    * the first backend step here.
+    */
+   static void moveTestEventFormAfterPreview(QInstance instance)
+   {
+      QProcessMetaData process = instance.getProcess("SendTestEventToWebhook");
+      if(process == null || process.getStepList() == null || process.getStepList().size() < 2)
+      {
+         return;
+      }
+      List<QStepMetaData> steps = process.getStepList();
+      if(steps.get(0) instanceof QFrontendStepMetaData form && "input".equals(form.getName()) && steps.get(1) instanceof QBackendStepMetaData)
+      {
+         steps.remove(0);
+         steps.add(1, form);
+      }
    }
 }

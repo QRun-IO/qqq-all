@@ -111,12 +111,13 @@ public final class QqqAllApplication extends AbstractQQQApplication
 
       instance.addTable(new QTableMetaData().withName("customer").withLabel("Customer")
          .withBackendName("h2").withPrimaryKeyField("id")
+         .withRecordLabelFormat("%s").withRecordLabelFields("name")
          .withField(new QFieldMetaData("id", QFieldType.INTEGER))
          .withField(new QFieldMetaData("name", QFieldType.STRING))
          .withField(new QFieldMetaData("email", QFieldType.STRING)));
       instance.addTable(new QTableMetaData().withName("order").withLabel("Order")
          .withBackendName("h2").withBackendDetails(new RDBMSTableBackendDetails().withTableName("orders"))
-         .withPrimaryKeyField("id")
+         .withPrimaryKeyField("id").withRecordLabelFormat("%s").withRecordLabelFields("orderNo")
          .withField(new QFieldMetaData("id", QFieldType.INTEGER))
          .withField(new QFieldMetaData("orderNo", QFieldType.STRING).withBackendName("order_no"))
          .withField(new QFieldMetaData("customerId", QFieldType.INTEGER).withBackendName("customer_id"))

@@ -72,6 +72,7 @@ import com.kingsrook.qbits.wormaudit.WormAuditQBitConfig;
 import com.kingsrook.qbits.wormaudit.WormAuditQBitProducer;
 import com.kingsrook.qqq.backend.core.exceptions.QException;
 import com.kingsrook.qqq.backend.core.instances.QInstanceEnricher;
+import com.kingsrook.qqq.backend.core.health.HealthMetaDataProvider;
 import com.kingsrook.qqq.backend.core.jobs.DurableJobsMetaData;
 import com.kingsrook.qqq.backend.core.jobs.DurableJobsMetaDataProvider;
 import com.kingsrook.qqq.backend.core.model.audits.AuditsMetaDataProvider;
@@ -229,6 +230,13 @@ final class EnterpriseFeatures
       features.put("sharing", i -> new SharingMetaDataProvider().defineAll(i, null));
       features.put("queryStats", i -> new QueryStatMetaDataProvider().defineAll(i, backendName, enricher));
       features.put("userPreferences", i -> new UserPreferencesKeyValueStoreMetaDataProvider().defineAll(i, backendName, null));
+      //////////////////////////////////////////////////////////////////////////
+      // central health: its tables turn on the health UI API extension, so  //
+      // /version lists it (QRun-IO/qqq-all#44). Enterprise only for now: in //
+      // the core profile its backend checks share the cached sqlite         //
+      // connection across the test suite's runtimes                         //
+      //////////////////////////////////////////////////////////////////////////
+      features.put("health", i -> new HealthMetaDataProvider().defineAll(i, backendName, enricher));
       features.put("durableJobs", i ->
       {
          new DurableJobsMetaDataProvider().defineAll(i, backendName, enricher);

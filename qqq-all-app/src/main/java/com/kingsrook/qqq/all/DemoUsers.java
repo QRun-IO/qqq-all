@@ -95,7 +95,7 @@ public class DemoUsers implements QAuthenticationModuleCustomizerInterface
          session.withPermissions(PermissionsHelper.getAllAvailablePermissionNames(instance));
          //////////////////////////////////////////////////////////////////////
          // permissions some modules check by literal name, outside the      //
-         // table/process permission rules                                   //
+         // table/process permission rules (QRun-IO/qqq#1362)                 //
          //////////////////////////////////////////////////////////////////////
          session.withPermissions("jobs_job.read", "jobs_admin", "data_analysis.admin");
          for(QSecurityKeyType keyType : instance.getSecurityKeyTypes().values())
