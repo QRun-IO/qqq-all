@@ -26,7 +26,6 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import com.kingsrook.qbits.alerts.AlertsQBitConfig;
 import com.kingsrook.qbits.alerts.AlertsQBitProducer;
-import com.kingsrook.qbits.assistant.AssistantQBitConfig;
 import com.kingsrook.qbits.assistant.AssistantQBitProducer;
 import com.kingsrook.qbits.backups.BackupsQBitConfig;
 import com.kingsrook.qbits.backups.BackupsQBitProducer;
@@ -350,8 +349,7 @@ final class EnterpriseFeatures
             .withTrustedPublicKeys(Map.of("local", keyPair.getPublic()))
             .withTableMetaDataCustomizer(tableCustomizer)).produce(i).addSelfToInstance(i);
       });
-      features.put("assistant", i -> new AssistantQBitProducer().withQBitConfig(new AssistantQBitConfig()
-         .withBackendName(backendName).withUiApiBaseUrl(baseUrl)
+      features.put("assistant", i -> new AssistantQBitProducer().withQBitConfig(EnterpriseAssistant.config(backendName, baseUrl, System::getenv)
          .withTableMetaDataCustomizer(tableCustomizer)).produce(i).addSelfToInstance(i));
 
       if(isSampleAppOnClasspath())

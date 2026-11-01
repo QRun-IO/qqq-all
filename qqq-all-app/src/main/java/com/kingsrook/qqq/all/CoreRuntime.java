@@ -66,6 +66,10 @@ final class CoreRuntime implements AutoCloseable
          try
          {
             WebhookSubscriptionsHelper.clearMemoizations();
+            if(EnterpriseFeatures.isEnabled())
+            {
+               EnterpriseAssistant.reconcileAtStartup(launcher.getQInstance());
+            }
          }
          finally
          {

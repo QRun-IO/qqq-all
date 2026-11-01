@@ -52,6 +52,8 @@
       <!-- Enterprise profile (QQQ_ALL_PROFILE=enterprise): every locally runnable qbit, for terminal-client testing. -->
       <dependency><groupId>com.kingsrook.qbits</groupId><artifactId>qbit-alerts</artifactId><version>0.1.0-SNAPSHOT</version></dependency>
       <dependency><groupId>com.kingsrook.qbits</groupId><artifactId>qbit-assistant</artifactId><version>0.1.0-SNAPSHOT</version></dependency>
+      <dependency><groupId>com.kingsrook.qbits</groupId><artifactId>qbit-assistant-provider-anthropic</artifactId><version>0.1.0-SNAPSHOT</version></dependency>
+      <dependency><groupId>com.kingsrook.qbits</groupId><artifactId>qbit-assistant-provider-openai</artifactId><version>0.1.0-SNAPSHOT</version></dependency>
       <dependency><groupId>com.kingsrook.qbits</groupId><artifactId>qbit-backups</artifactId><version>0.1.0-SNAPSHOT</version></dependency>
       <dependency><groupId>com.kingsrook.qbits</groupId><artifactId>qbit-cdn</artifactId><version>0.1.0-SNAPSHOT</version></dependency>
       <dependency><groupId>com.kingsrook.qbits</groupId><artifactId>qbit-cluster</artifactId><version>0.1.0-SNAPSHOT</version></dependency>
