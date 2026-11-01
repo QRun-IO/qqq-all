@@ -76,7 +76,12 @@ import com.kingsrook.qqq.backend.core.health.HealthMetaDataProvider;
 import com.kingsrook.qqq.backend.core.jobs.DurableJobsMetaData;
 import com.kingsrook.qqq.backend.core.jobs.DurableJobsMetaDataProvider;
 import com.kingsrook.qqq.backend.core.model.audits.AuditsMetaDataProvider;
+import com.kingsrook.qqq.backend.core.model.metadata.QBackendMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.QInstance;
+import com.kingsrook.qqq.backend.core.model.metadata.tables.Capability;
+import com.kingsrook.qqq.backend.core.modules.backend.implementations.memory.MemoryBackendModule;
+import com.kingsrook.qqq.backend.core.processes.implementations.columnstats.ColumnStatsStep;
+import com.kingsrook.qqq.backend.module.rdbms.model.metadata.RDBMSBackendMetaData;
 import com.kingsrook.qqq.backend.core.model.metadata.audits.AuditLevel;
 import com.kingsrook.qqq.backend.core.model.metadata.audits.QAuditRules;
 import com.kingsrook.qqq.backend.core.model.metadata.producers.MetaDataCustomizerInterface;
@@ -376,7 +381,61 @@ final class EnterpriseFeatures
          }
       }
 
+      enableColumnStatistics(instance);
+      auditDataTables(instance);
       addNavigationApps(instance);
+   }
+
+
+
+   /*******************************************************************************
+    ** QQQ turns QUERY_STATS (column statistics: counts, distinct values, min/max
+    ** and averages per field) off on every backend by default. Turn it on for the
+    ** backends whose module can aggregate, RDBMS (H2, SQLite, the sample's
+    ** in-memory H2) and the memory backend, so their tables offer statistics as
+    ** the web UI and the terminal clients expect; filesystem and API backends
+    ** cannot aggregate and stay without it. Tables of those backends that list
+    ** QUERY_STATS as disabled keep it off. The columnStats process that serves
+    ** the statistics is added when the instance lacks it.
+    *******************************************************************************/
+   static void enableColumnStatistics(QInstance instance)
+   {
+      ////////////////////////////////////////////////////////////////////
+      // the UI API serves column statistics through this process       //
+      ////////////////////////////////////////////////////////////////////
+      if(instance.getProcess(ColumnStatsStep.getProcessMetaData().getName()) == null)
+      {
+         instance.addProcess(ColumnStatsStep.getProcessMetaData());
+      }
+      for(QBackendMetaData backend : instance.getBackends().values())
+      {
+         if(backend instanceof RDBMSBackendMetaData || new MemoryBackendModule().getBackendType().equals(backend.getBackendType()))
+         {
+            backend.withCapability(Capability.QUERY_STATS);
+         }
+      }
+   }
+
+
+
+   /*******************************************************************************
+    ** Field-level audits on the demo and sample data tables (customer, order and
+    ** address get them with the audits feature), when audits are installed.
+    *******************************************************************************/
+   static void auditDataTables(QInstance instance)
+   {
+      if(instance.getTable("audit") == null)
+      {
+         return;
+      }
+      for(String tableName : List.of("customer", "order", "orderLine", "address", "person", "pet", "petNote", "carrier"))
+      {
+         QTableMetaData table = instance.getTable(tableName);
+         if(table != null && table.getAuditRules() == null)
+         {
+            table.setAuditRules(new QAuditRules().withAuditLevel(AuditLevel.FIELD));
+         }
+      }
    }
 
 
