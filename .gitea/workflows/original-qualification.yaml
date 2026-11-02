@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   qualify:
-    uses: self:KofTwentyTwo/platform-ci/.gitea/workflows/aggregate.yaml@daff4eb99c3bde4c3d38c4854a319c839f779744
+    uses: self:KofTwentyTwo/platform-ci/.gitea/workflows/aggregate.yaml@b5eda78c467013c035747236a91f043ef0a90b45
     with:
       runner: linux-small
       docker-runner: container-build
