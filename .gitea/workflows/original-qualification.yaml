@@ -1,0 +1,14 @@
+# Actual original qqq-all reactor build, core HTTP smoke and full Compose HTTP smoke qualification (manual run).
+# A manual dispatch is not a push to develop, so the original `develop-image` job legitimately skips here; no image is
+# built or published, and no manual release is exercised.
+name: original-qualification
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  qualify:
+    uses: self:KofTwentyTwo/platform-ci/.gitea/workflows/aggregate.yaml@daff4eb99c3bde4c3d38c4854a319c839f779744
+    with:
+      runner: linux-small
+      docker-runner: container-build
