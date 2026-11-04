@@ -1,0 +1,42 @@
+name: Original QQQ all container lifecycle
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Reviewed original manual release version; enable/license controls must also be approved
+        type: choice
+        options: ['4.1.0', '4.1.0-RC.1']
+        required: true
+      release_sha:
+        description: Current full develop SHA already signed and tagged with that exact version
+        type: string
+        required: true
+      smoke_run_id:
+        description: Own successful core/full develop push smoke at exactly the selected source
+        type: string
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  develop:
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+    uses: KofTwentyTwo/platform-ci/.gitea/workflows/aggregate.yaml@qrun-release-v1
+    with:
+      runner: linux-small
+      docker-runner: container-build
+  release:
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop' }}
+    permissions:
+      contents: write
+      actions: read
+      packages: read
+    uses: KofTwentyTwo/platform-ci/.gitea/workflows/qqq-all-release.yaml@qrun-release-v1
+    with:
+      runner: linux-small
+      docker-runner: container-build
+      version: ${{ inputs.version }}
+      release_sha: ${{ inputs.release_sha }}
+      smoke_run_id: ${{ inputs.smoke_run_id }}
